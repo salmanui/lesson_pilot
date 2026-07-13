@@ -1,25 +1,35 @@
-name: CI
+# CI for LessonPilot — a Next.js SERVER app (next.config.js uses output: 'standalone').
+#
+# This workflow does NOT deploy. Vercel's Git integration already deploys
+# automatically: production on push to `main`, previews on pull requests.
+# The job below only lints and builds so a broken commit is caught early,
+# independently of Vercel.
+#
+# NOTE: This is intentionally different from a "Deploy to GitHub Pages" workflow.
+# GitHub Pages only serves static files and needs `output: 'export'` (an `out/`
+# folder). LessonPilot is server-rendered, so Pages is not an option here.
+name: Next.js CI
 
-# Validates the Next.js app on every push and pull request:
-# install dependencies -> lint -> production build.
 on:
   push:
-    branches: ['**']
+    branches: [main]
   pull_request:
-    branches: ['**']
+    branches: [main]
+  workflow_dispatch:
 
-# Cancel superseded runs on the same ref to save CI minutes.
+# Cancel an in-progress run when a newer commit is pushed to the same ref.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
     name: Lint & Build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Node.js
@@ -32,10 +42,11 @@ jobs:
         run: npm ci
 
       - name: Lint
-        run: npm run lint --if-present
+        run: npm run lint
 
       - name: Build
         run: npm run build
-        env:
-          # Disable Next.js anonymous telemetry in CI.
-          NEXT_TELEMETRY_DISABLED: '1'
+        # Public build-time vars are read from the committed `.env`
+        # (NEXT_PUBLIC_* values are client-exposed, not secrets). If you ever
+        # move real secrets out of `.env`, add them as GitHub Actions secrets
+        # and re-expose them here via an `env:` block.
