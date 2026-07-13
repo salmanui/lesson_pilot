@@ -1,6 +1,7 @@
 "use client";
 
 import { useContext, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
 import { BsStars } from "react-icons/bs";
@@ -124,15 +125,15 @@ export default function AuthPage({ initialMode = "login" }) {
           The inner min-h-full wrapper keeps the form centred when it fits, yet lets it
           scroll from the top (no clipped header) when it overflows. */}
       <div className="h-screen w-full overflow-y-auto lg:w-[54%] xl:w-1/2">
-        <div className="flex min-h-full w-full items-center justify-center px-5 py-10 sm:px-8">
+        <div className="flex min-h-full w-full items-center justify-center px-5 py-6 md:py-10 md:px-8">
           <div className="w-full max-w-md animate-fade-in-up">
           {/* Brand (mobile / tablet only — the showcase carries it on desktop) */}
-          <div className="mb-8 flex items-center justify-center gap-2.5 lg:hidden">
+          <Link href="/" className="mb-8 flex items-center justify-center gap-2.5 lg:hidden">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-sky-500 text-white shadow-lg shadow-indigo-500/30">
               <BsStars className="h-5 w-5" />
             </div>
             <span className="text-lg font-bold text-slate-900">LessonPilot</span>
-          </div>
+          </Link>
 
           <div className="mb-6 text-center lg:text-left">
             <h2 className="text-2xl font-bold text-slate-900 sm:text-3xl">

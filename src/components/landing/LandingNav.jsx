@@ -3,9 +3,8 @@
 import { useContext, useEffect, useState } from "react";
 import Link from "next/link";
 import { BsStars } from "react-icons/bs";
-import { FiMenu, FiX, FiArrowRight, FiGrid, FiLogOut } from "react-icons/fi";
+import { FiMenu, FiX, FiArrowRight, FiGrid } from "react-icons/fi";
 import { UserContext } from "@/src/utils/userContext";
-import { getInitials } from "@/src/utils/userInitials";
 import ScrollLink from "./ScrollLink";
 import UserAvatarMenu from "./UserAvatarMenu";
 
@@ -21,7 +20,7 @@ const NAV_LINKS = [
  * On mobile the menu is a left-sliding drawer.
  */
 export default function LandingNav() {
-  const { user, hasLoadedUser, logout } = useContext(UserContext);
+  const { user, hasLoadedUser } = useContext(UserContext);
   const [open, setOpen] = useState(false);
   const isAuthed = hasLoadedUser && !!user;
 
@@ -87,27 +86,21 @@ export default function LandingNav() {
         </div>
 
         {/* Mobile cluster: auth actions beside the toggle */}
-        <div className="flex items-center gap-2 md:hidden">
+        <div className="flex items-center gap-3 md:hidden">
           {isAuthed ? (
             <>
               <Link
                 href="/dashboard"
-                className="group relative inline-flex items-center gap-1.5 overflow-hidden rounded-lg bg-gradient-to-r from-indigo-600 to-sky-500 px-3 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-indigo-500/40 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2"
+                className="group relative inline-flex items-center gap-1.5 overflow-hidden rounded-lg bg-gradient-to-r from-indigo-600 to-sky-500 px-3 py-2 text-xs md:text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-indigo-500/40 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2"
               >
                 <span
                   aria-hidden="true"
                   className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent group-hover:animate-shimmer"
                 />
                 <FiGrid className="h-4 w-4 transition-transform duration-300 group-hover:rotate-6 group-hover:scale-110" />
-                <span className="hidden min-[400px]:inline">Dashboard</span>
+                <span>Dashboard</span>
               </Link>
-              <Link
-                href="/dashboard"
-                aria-label="Your dashboard"
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-sky-500 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25"
-              >
-                {getInitials(user)}
-              </Link>
+              <UserAvatarMenu showDashboardButton={false} includeDashboardInMenu />
             </>
           ) : (
             <>
@@ -132,7 +125,7 @@ export default function LandingNav() {
           <button
             type="button"
             onClick={() => setOpen((prev) => !prev)}
-            className="rounded-lg p-2 text-slate-700 transition hover:bg-slate-100"
+            className="rounded-lg py-2 text-slate-700 transition hover:text-indigo-600 focus:outline-none"
             aria-label="Open menu"
             aria-expanded={open}
           >
@@ -188,43 +181,6 @@ export default function LandingNav() {
               </ScrollLink>
             ))}
           </div>
-
-          {isAuthed && (
-            <div className="mt-3 flex flex-col gap-2 border-t border-slate-100 pt-3">
-              <div className="flex items-center gap-3 px-1 py-1">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-sky-500 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25">
-                  {getInitials(user)}
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-slate-900">
-                    {user?.name || user?.email || "Your account"}
-                  </p>
-                  {user?.email && (
-                    <p className="truncate text-xs text-slate-500">{user.email}</p>
-                  )}
-                </div>
-              </div>
-              <Link
-                href="/dashboard"
-                onClick={() => setOpen(false)}
-                className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                <FiGrid className="h-4 w-4 text-slate-400" />
-                Dashboard
-              </Link>
-              <button
-                type="button"
-                onClick={() => {
-                  setOpen(false);
-                  logout();
-                }}
-                className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-rose-600 hover:bg-rose-50"
-              >
-                <FiLogOut className="h-4 w-4" />
-                Sign out
-              </button>
-            </div>
-          )}
         </div>
       </aside>
     </>

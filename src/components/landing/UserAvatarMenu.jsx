@@ -11,7 +11,10 @@ import { getInitials } from "@/src/utils/userInitials";
  * dropdown showing the user's name/email plus quick actions (Dashboard, Sign out).
  * Closes on outside click or the Escape key.
  */
-export default function UserAvatarMenu() {
+export default function UserAvatarMenu({
+  showDashboardButton = true,
+  includeDashboardInMenu = false,
+}) {
   const { user, logout } = useContext(UserContext);
   const [open, setOpen] = useState(false);
   const containerRef = useRef(null);
@@ -47,17 +50,19 @@ export default function UserAvatarMenu() {
 
   return (
     <div ref={containerRef} className="flex items-center gap-3">
-      <Link
-        href="/dashboard"
-        className="group relative inline-flex items-center gap-2 overflow-hidden rounded-lg bg-gradient-to-r from-indigo-600 to-sky-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-indigo-500/40 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2"
-      >
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent group-hover:animate-shimmer"
-        />
-        <FiGrid className="h-4 w-4 transition-transform duration-300 group-hover:rotate-6 group-hover:scale-110" />
-        Dashboard
-      </Link>
+      {showDashboardButton && (
+        <Link
+          href="/dashboard"
+          className="group relative inline-flex items-center gap-2 overflow-hidden rounded-lg bg-gradient-to-r from-indigo-600 to-sky-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-indigo-500/40 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2"
+        >
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent group-hover:animate-shimmer"
+          />
+          <FiGrid className="h-4 w-4 transition-transform duration-300 group-hover:rotate-6 group-hover:scale-110" />
+          Dashboard
+        </Link>
+      )}
 
       <div className="relative">
         <button
@@ -82,6 +87,18 @@ export default function UserAvatarMenu() {
                 <p className="truncate text-xs text-slate-500">{user.email}</p>
               )}
             </div>
+
+            {includeDashboardInMenu && (
+              <Link
+                href="/dashboard"
+                role="menuitem"
+                onClick={() => setOpen(false)}
+                className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              >
+                <FiGrid className="h-4 w-4 text-slate-400" />
+                Dashboard
+              </Link>
+            )}
 
             <button
               type="button"

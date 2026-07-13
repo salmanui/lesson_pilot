@@ -6,7 +6,7 @@ authentication flow (email/password + Google SSO / One Tap), and a login-gated
 dashboard that hosts the AI teaching tools.
 
 > **Brand vs. module:** *LessonPilot* is the product/company brand (logo wordmark,
-> metadata, marketing). *"Teacher Tools"* is the internal module — the set of tools
+> metadata, marketing). *"AI Tools"* is the internal module — the set of tools
 > surfaced on the `/dashboard` (Lesson Plan Generator + Test Generator).
 > The repository itself is named `AITech`.
 
@@ -34,7 +34,7 @@ dashboard that hosts the AI teaching tools.
 | `/` | Public marketing landing page | **Public** |
 | `/login` | Sign in (email/password + Google) | Public |
 | `/register` | Create account | Public |
-| `/dashboard` | Teacher Tools home (tool launcher) | **Gated** |
+| `/dashboard` | AI Tools home (tool launcher) | **Gated** |
 | `/ai-test-generator` | AI Test Generator tool | **Gated** |
 | `/ai/lesson-plan-generator` | Lesson Plan Generator tool | **Gated** |
 | `/ai/teacher/lesson-plan-generator` | Teacher lesson plan view/export | **Gated** |
@@ -50,7 +50,7 @@ Visitor opens  /  (public landing)
    /login  or  /register
         │  successful auth  → user saved to context + localStorage
         ▼
-   /dashboard  (Teacher Tools)
+   /dashboard  (AI Tools)
         │  "Sign out"  → clears session
         ▼
    redirected back to /login
@@ -178,7 +178,7 @@ src/components/landing/SectionHeading.jsx  # reusable eyebrow/title/subtitle
 
 ### Changed
 ```
-app/(home)/page.js            # was Teacher Tools → now the public landing page
+app/(home)/page.js            # was AI Tools → now the public landing page
 app/ai-test-generator/page.js # wrapped in RequireAuth
 app/ai/lesson-plan-generator/page.js            # wrapped in RequireAuth
 app/ai/teacher/lesson-plan-generator/page.js    # wrapped in RequireAuth

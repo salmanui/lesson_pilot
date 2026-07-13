@@ -2,6 +2,7 @@
 
 import { BsStars } from "react-icons/bs";
 import { FiZap, FiClipboard, FiFileText, FiShield } from "react-icons/fi";
+import Link from "next/link";
 
 const FEATURES = [
   {
@@ -48,14 +49,14 @@ export default function AuthShowcase({ mode }) {
       />
 
       <div className="relative z-10 flex w-full flex-col justify-between p-10 text-white xl:p-14">
-        <div className="flex items-center gap-2.5">
+        <Link href="/" className="inline-flex items-center gap-2.5">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 backdrop-blur">
             <BsStars className="h-5 w-5" />
           </div>
           <span className="text-lg font-bold tracking-tight">LessonPilot</span>
-        </div>
+        </Link>
 
-        <div className="max-w-md">
+        <div className="max-w-md mt-4">
           <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3.5 py-1.5 text-xs font-semibold backdrop-blur">
             <FiZap className="h-3.5 w-3.5" /> Powered by AI
           </div>
