@@ -309,42 +309,18 @@ npm run lint     # eslint
 
 ## Deployment (GitHub → Vercel production)
 
-Every push to `main` runs two GitHub Actions workflows:
+The project uses Vercel's native GitHub integration:
 
-| Workflow | File | What it does |
-| --- | --- | --- |
-| Next.js CI | `.github/workflows/ci.yml` | Lint + build check (no deploy) |
-| Vercel Production Deployment | `.github/workflows/vercel.yml` | Builds and deploys to Vercel **production** |
+- A push to `main` creates a Vercel **production** deployment.
+- A pull request creates a Vercel preview deployment.
+- `.github/workflows/ci.yml` independently runs lint and the production build.
 
-Vercel's own Git integration is intentionally disabled in `vercel.json`
-(`"git": { "deploymentEnabled": false }`) so the GitHub Action is the single
-deploy path — no duplicate deployments.
+No Vercel token or project-ID secrets are required in GitHub Actions. In the
+Vercel project, keep `salmanui/lesson_pilot` connected under **Settings → Git**
+and set `main` as the production branch. Automatic Git deployments are enabled
+by default; do not add `"git": { "deploymentEnabled": false }` to
+`vercel.json`.
 
-### Required GitHub Actions secrets
-
-Set these under **Repo → Settings → Secrets and variables → Actions**:
-
-| Secret | Where to get it |
-| --- | --- |
-| `VERCEL_TOKEN` | [vercel.com/account/tokens](https://vercel.com/account/tokens) → Create Token (scope: full account) |
-| `VERCEL_ORG_ID` | Vercel project → Settings → General (or `.vercel/project.json` after `vercel link`) |
-| `VERCEL_PROJECT_ID` | Same place as `VERCEL_ORG_ID` |
-
-> ⚠️ **Never commit tokens to this repo.** Tokens belong only in GitHub
-> Actions secrets. If a token is ever exposed, revoke it immediately at
-> vercel.com/account/tokens and create a new one.
-
-### Fixing `The token provided via --token argument is not valid`
-
-This error is an authentication failure, not a Next.js build failure. Create a
-new token at [Vercel Account Tokens](https://vercel.com/account/tokens), choose
-the account/team scope that owns the project, and replace the value of the
-`VERCEL_TOKEN` repository secret. Paste only the token itself—do not include
-quotes, `Bearer`, the secret name, or whitespace. Then re-run the failed
-workflow from GitHub Actions; a new code commit is not required.
-
-The workflow authenticates through the `VERCEL_TOKEN` environment variable and
-checks that all three required secrets are present before starting a production
-build. If authentication succeeds but project lookup fails, run `vercel link`
-for the existing project and copy the exact `orgId` and `projectId` from
-`.vercel/project.json` into the corresponding GitHub repository secrets.
+If Vercel reports that it cannot verify the commit author, connect the GitHub
+account under **Vercel Account Settings → Authentication**, and ensure the
+commit email belongs to that GitHub account.
