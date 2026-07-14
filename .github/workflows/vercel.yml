@@ -9,6 +9,9 @@
 #   VERCEL_PROJECT_ID — Vercel project → Settings → General
 name: Vercel Production Deployment
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]
@@ -45,11 +48,47 @@ jobs:
       - name: Install Vercel CLI
         run: npm install --global vercel@56.1.0
 
+      - name: Validate Deployment Secrets
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          invalid=0
+
+          for name in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID; do
+            value="${!name:-}"
+
+            if [[ -z "$value" ]]; then
+              echo "::error::$name is missing. Add it under Settings > Secrets and variables > Actions."
+              invalid=1
+            elif [[ "$value" =~ [[:space:]] ]]; then
+              echo "::error::$name contains whitespace. Paste only the value, without quotes or line breaks."
+              invalid=1
+            fi
+          done
+
+          if (( invalid )); then
+            exit 1
+          fi
+
+      # Vercel recommends VERCEL_TOKEN for CI instead of a --token argument,
+      # which can be visible in command lines and process listings.
+      - name: Authenticate Vercel CLI
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel whoami
+
       - name: Pull Vercel Environment Information
-        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel pull --yes --environment=production
 
       - name: Build Project Artifacts
-        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel build --prod
 
       - name: Deploy Project Artifacts to Vercel
-        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel deploy --prebuilt --prod
