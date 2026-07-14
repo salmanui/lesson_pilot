@@ -304,3 +304,6 @@ npm run lint     # eslint
 - [ ] (Optional) Add server-side protection (cookies + Next.js middleware) once the
       backend issues real sessions/tokens.
 - [ ] Confirm the `organizationName` signup field name with the backend.
+
+### Vercel Token
+vcp_01lg3beIq0KAFzXozTVOYr1GOg1r1JeYciv0Xvd9NU5G7cMSLh019WiV
