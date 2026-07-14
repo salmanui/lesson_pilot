@@ -1,106 +1,19 @@
-# Automatic Vercel deploy for LessonPilot (a Next.js SERVER app).
-#
-# Triggers:
-#   - push to `main`        -> deploys to PRODUCTION
-#   - pull_request -> main  -> deploys a PREVIEW build
-#   - manual (Actions tab)  -> choose preview or production
-#
-# Requires three repository secrets
-# (GitHub repo > Settings > Secrets and variables > Actions > New repository secret):
-#   VERCEL_TOKEN       -> https://vercel.com/account/tokens
-#   VERCEL_ORG_ID      -> run `vercel link`, then read .vercel/project.json ("orgId")
-#   VERCEL_PROJECT_ID  -> run `vercel link`, then read .vercel/project.json ("projectId")
-#
-# IMPORTANT: If Vercel's own Git integration is also enabled for this repo, it
-# will ALSO auto-deploy on push, causing double deploys. Pick ONE source of
-# truth: either use this workflow (disable auto-deploy in the Vercel project's
-# Git settings), or delete this workflow and rely on the Vercel Git integration.
-name: Vercel Deploy
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: "Deploy target"
-        type: choice
-        default: preview
-        options:
-          - preview
-          - production
-
-# Don't run overlapping deploys for the same ref; cancel the older one.
-concurrency:
-  group: vercel-deploy-${{ github.ref }}
-  cancel-in-progress: true
-
+name: Vercel Preview Deployment
 env:
   VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
   VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-
+on:
+  workflow_dispatch:
 jobs:
-  deploy:
-    name: Deploy to Vercel
+  Deploy-Preview:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-
     steps:
-      - name: Verify required secrets
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        run: |
-          missing=""
-          [ -z "$VERCEL_TOKEN" ] && missing="$missing VERCEL_TOKEN"
-          [ -z "$VERCEL_ORG_ID" ] && missing="$missing VERCEL_ORG_ID"
-          [ -z "$VERCEL_PROJECT_ID" ] && missing="$missing VERCEL_PROJECT_ID"
-          if [ -n "$missing" ]; then
-            echo "::error::Missing required repository secret(s):$missing"
-            echo "Add them under: repo Settings > Secrets and variables > Actions > New repository secret"
-            echo "  VERCEL_TOKEN      -> https://vercel.com/account/tokens"
-            echo "  VERCEL_ORG_ID     -> .vercel/project.json (\"orgId\") after running: vercel link"
-            echo "  VERCEL_PROJECT_ID -> .vercel/project.json (\"projectId\") after running: vercel link"
-            exit 1
-          fi
-          echo "All required Vercel secrets are present."
-
-      - name: Determine deploy target
-        id: target
-        run: |
-          if [ "${{ github.event_name }}" = "push" ]; then
-            echo "environment=production" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "environment=${{ inputs.environment }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "environment=preview" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
+      - uses: actions/checkout@v2
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
-
-      - name: Pull Vercel environment information
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: vercel pull --yes --environment=${{ steps.target.outputs.environment }} --token="$VERCEL_TOKEN"
-
-      - name: Build project artifacts
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: vercel build ${{ steps.target.outputs.environment == 'production' && '--prod' || '' }} --token="$VERCEL_TOKEN"
-
-      - name: Deploy project artifacts to Vercel
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: vercel deploy --prebuilt ${{ steps.target.outputs.environment == 'production' && '--prod' || '' }} --token="$VERCEL_TOKEN"
+      - name: Pull Vercel Environment Information
+        run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Build Project Artifacts
+        run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Deploy Project Artifacts to Vercel
+        run: vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }}
