@@ -305,5 +305,31 @@ npm run lint     # eslint
       backend issues real sessions/tokens.
 - [ ] Confirm the `organizationName` signup field name with the backend.
 
-### Vercel Token
-vcp_01lg3beIq0KAFzXozTVOYr1GOg1r1JeYciv0Xvd9NU5G7cMSLh019WiV
+---
+
+## Deployment (GitHub → Vercel production)
+
+Every push to `main` runs two GitHub Actions workflows:
+
+| Workflow | File | What it does |
+| --- | --- | --- |
+| Next.js CI | `.github/workflows/ci.yml` | Lint + build check (no deploy) |
+| Vercel Production Deployment | `.github/workflows/vercel.yml` | Builds and deploys to Vercel **production** |
+
+Vercel's own Git integration is intentionally disabled in `vercel.json`
+(`"git": { "deploymentEnabled": false }`) so the GitHub Action is the single
+deploy path — no duplicate deployments.
+
+### Required GitHub Actions secrets
+
+Set these under **Repo → Settings → Secrets and variables → Actions**:
+
+| Secret | Where to get it |
+| --- | --- |
+| `VERCEL_TOKEN` | [vercel.com/account/tokens](https://vercel.com/account/tokens) → Create Token (scope: full account) |
+| `VERCEL_ORG_ID` | Vercel project → Settings → General (or `.vercel/project.json` after `vercel link`) |
+| `VERCEL_PROJECT_ID` | Same place as `VERCEL_ORG_ID` |
+
+> ⚠️ **Never commit tokens to this repo.** Tokens belong only in GitHub
+> Actions secrets. If a token is ever exposed, revoke it immediately at
+> vercel.com/account/tokens and create a new one.

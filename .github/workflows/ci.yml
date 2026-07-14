@@ -1,7 +1,8 @@
 # CI for LessonPilot — a Next.js SERVER app (next.config.js uses output: 'standalone').
 #
-# This workflow does NOT deploy. Vercel's Git integration already deploys
-# automatically: production on push to `main`, previews on pull requests.
+# This workflow does NOT deploy. Deployment happens in
+# .github/workflows/vercel.yml, which deploys to Vercel production on every
+# push to `main` (Vercel's own Git integration is disabled in vercel.json).
 # The job below only lints and builds so a broken commit is caught early,
 # independently of Vercel.
 #
