@@ -26,6 +26,9 @@ concurrency:
 
 jobs:
   deploy-production:
+    # Guard: production deploys only ever come from `main`, even when the
+    # workflow is dispatched manually from another branch in the Actions UI.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -37,8 +40,10 @@ jobs:
         with:
           node-version: 20
 
+      # Pinned (not @latest) so a compromised or broken CLI release can't run
+      # with the VERCEL_TOKEN in scope. Bump the version deliberately.
       - name: Install Vercel CLI
-        run: npm install --global vercel@latest
+        run: npm install --global vercel@56.1.0
 
       - name: Pull Vercel Environment Information
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}

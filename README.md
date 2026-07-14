@@ -8,7 +8,7 @@ dashboard that hosts the AI teaching tools.
 > **Brand vs. module:** *LessonPilot* is the product/company brand (logo wordmark,
 > metadata, marketing). *"AI Tools"* is the internal module — the set of tools
 > surfaced on the `/dashboard` (Lesson Plan Generator + Test Generator).
-> The repository itself is named `AITech`.
+> The repository itself is named `lesson_pilot` (github.com/salmanui/lesson_pilot).
 
 ---
 
