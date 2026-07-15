@@ -58,7 +58,7 @@ export default function AuthShowcase({ mode }) {
 
         <div className="max-w-md mt-4">
           <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3.5 py-1.5 text-xs font-semibold backdrop-blur">
-            <FiZap className="h-3.5 w-3.5" /> Powered by AI
+            <FiZap className="h-3.5 w-3.5" /> Powered by LessonPilot AI
           </div>
 
           <h1 className="text-4xl font-bold leading-tight xl:text-[2.75rem]">

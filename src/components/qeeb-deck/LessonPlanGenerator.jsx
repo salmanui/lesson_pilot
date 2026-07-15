@@ -3,25 +3,21 @@
 import React, { useContext, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { BsStars } from "react-icons/bs";
-import { RiAiGenerate2 } from "react-icons/ri";
 import {
-  HiOutlineBuildingLibrary,
-  HiOutlineUserGroup,
-  HiOutlineBookOpen,
-  HiOutlinePencilSquare,
   HiOutlineClipboardDocumentList,
   HiOutlineSquares2X2,
   HiOutlineBeaker,
   HiOutlineMagnifyingGlass,
   HiOutlineAcademicCap,
   HiOutlineSparkles,
-  HiChevronDown,
   HiCheck,
 } from "react-icons/hi2";
 import { fetchLessonPlan } from "../../utils/ai/lessonPlanApi";
 import { useRouter } from "next/navigation";
 import { UserContext } from "../../utils/userContext";
 import AuthModal from "../AuthModal";
+import DashboardNavbar from "@/src/components/dashboard/DashboardNavbar";
+import SelectDropdown from "@/src/components/ui/SelectDropdown";
 import {
   GUEST_AI_TOOL_KEYS,
   canUseAiToolAsGuest,
@@ -32,11 +28,68 @@ import {
   getUserSubscriptionStatus,
 } from "../../utils/subscriptionApi";
 
-const CLASS_OPTIONS = [
-  ...Array.from({ length: 12 }, (_, i) => String(i + 1)), // "1".."12"
-  "UG",
-  "PG",
+// Values stay human-readable because getIncludeLine() below parses them to
+// build the syllabus alignment line sent to the model.
+const BOARD_OPTIONS = [
+  {
+    // Keep the value bare: getIncludeLine() treats whatever precedes "SSC" as a
+    // state name, so "SSC Board" would read "Board SSC (State Board)".
+    value: "SSC",
+    label: "SSC",
+    description: "State Board — Secondary School Certificate",
+  },
+  {
+    value: "CBSE",
+    label: "CBSE",
+    description: "Central Board of Secondary Education",
+  },
+  {
+    value: "ICSE",
+    label: "ICSE",
+    description: "CISCE — Indian Certificate of Secondary Education",
+  },
+  { value: "ISC", label: "ISC", description: "CISCE — Indian School Certificate" },
+  {
+    value: "IB",
+    label: "IB",
+    description: "International Baccalaureate",
+  },
+  {
+    value: "Cambridge (CAIE)",
+    label: "Cambridge (CAIE)",
+    description: "IGCSE and A-Levels",
+  },
+  {
+    value: "NIOS",
+    label: "NIOS",
+    description: "National Institute of Open Schooling",
+  },
+  {
+    value: "Maharashtra SSC",
+    label: "Maharashtra SSC",
+    description: "Maharashtra State Board",
+  },
+  {
+    value: "Tamil Nadu State Board",
+    label: "Tamil Nadu State Board",
+    description: "Samacheer Kalvi",
+  },
+  {
+    value: "Karnataka State Board",
+    label: "Karnataka State Board",
+    description: "KSEEB",
+  },
+  {
+    value: "UP Board",
+    label: "UP Board",
+    description: "Uttar Pradesh Madhyamik Shiksha Parishad",
+  },
 ];
+
+const CLASS_OPTIONS = Array.from({ length: 10 }, (_, i) => {
+  const value = String(i + 1);
+  return { value, label: `Class ${value}` };
+});
 
 // keep this exactly as an ARRAY (used by UI .map)
 const FORMATS = [
@@ -65,6 +118,54 @@ const FORMAT_ICONS = {
 const DEFAULT_SPACE = "K-12 School";
 const DEFAULT_TONE = ["Informative", "Academic", "Direct"];
 const DEFAULT_WC = "400+-50";
+
+const TIPS = [
+  "Name the exact concept, not just the chapter — “Newton’s Third Law” beats “Motion”.",
+  "5-Part and 4-Part support High Detail; the rest generate as an outline.",
+  "Your board choice pins the plan to that syllabus.",
+];
+
+/* ---------- Small building blocks ---------- */
+
+const SectionHeading = ({ step, title, hint }) => (
+  <div className="mb-4 flex items-start gap-3">
+    <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-sky-500 text-[11px] font-bold text-white shadow-sm shadow-indigo-500/30">
+      {step}
+    </span>
+    <div>
+      <h2 className="text-sm font-bold uppercase tracking-wide text-slate-900">
+        {title}
+      </h2>
+      {hint && <p className="mt-0.5 text-sm leading-6 text-slate-500">{hint}</p>}
+    </div>
+  </div>
+);
+
+const Field = ({ label, hint, children, error }) => (
+  <div>
+    <label className="mb-1.5 block text-sm font-semibold text-gray-800">
+      {label}
+    </label>
+    {hint && <p className="mb-1.5 text-xs leading-5 text-slate-500">{hint}</p>}
+    {children}
+    {error}
+  </div>
+);
+
+const SummaryRow = ({ label, value }) => (
+  <div className="flex items-baseline justify-between gap-3 border-b border-slate-100 py-2 last:border-0">
+    <span className="shrink-0 text-xs font-medium uppercase tracking-wide text-slate-400">
+      {label}
+    </span>
+    <span
+      className={`min-w-0 truncate text-right text-sm ${
+        value ? "font-semibold text-slate-800" : "text-slate-300"
+      }`}
+    >
+      {value || "—"}
+    </span>
+  </div>
+);
 
 const LessonPlanGenerator = ({ onSubmit }) => {
   const {
@@ -133,15 +234,18 @@ const LessonPlanGenerator = ({ onSubmit }) => {
   const error = (msg) =>
     touched ? <p className="mt-1 text-xs text-red-600">{msg}</p> : null;
 
-  // UI-only: progress across the four required text fields
+  // UI-only: progress across the four required fields
   const filledCount = [board, klass, subject, topic].filter((v) =>
     v.trim()
   ).length;
   const progress = (filledCount / 4) * 100;
 
-  // Shared input styling (leading icon padding baked in via pl-10)
+  const classLabel =
+    CLASS_OPTIONS.find((option) => option.value === klass)?.label || "";
+
+  // Shared input styling
   const inputBase =
-    "w-full rounded-xl border border-gray-200 bg-white/80 pl-10 py-2.5 text-sm text-gray-900 placeholder-gray-400 shadow-sm transition focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-indigo-500/15";
+    "w-full rounded-xl border border-gray-200 bg-white/80 px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 shadow-sm transition hover:border-indigo-300 focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-indigo-500/15";
 
   const requireGenerationAccess = () => {
     if (!user) return false;
@@ -267,289 +371,325 @@ const LessonPlanGenerator = ({ onSubmit }) => {
 
   return (
     <>
-      <div className="relative w-full overflow-hidden font-lato">
-        {/* Decorative animated background */}
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-slate-50 via-indigo-50 to-sky-100" />
-        <div className="pointer-events-none absolute -left-24 -top-24 h-80 w-80 rounded-full bg-indigo-300/40 blur-3xl animate-blob" />
-        <div className="pointer-events-none absolute top-1/3 -right-24 h-96 w-96 rounded-full bg-sky-300/40 blur-3xl animate-blob [animation-delay:3s]" />
-        <div className="pointer-events-none absolute -bottom-16 left-1/3 h-80 w-80 rounded-full bg-blue-300/40 blur-3xl animate-blob [animation-delay:6s]" />
+      <main className="relative min-h-screen bg-[#f7fbff] font-lato text-slate-950">
+        <DashboardNavbar />
 
-        <div className="relative z-[1] h-screen overflow-auto px-3 py-8 md:p-10">
-          <div className="mx-auto max-w-3xl animate-fade-in-up overflow-hidden rounded-3xl border border-white/60 bg-white/70 shadow-[0_20px_60px_-15px_rgba(76,29,149,0.25)] backdrop-blur-xl">
-            {/* Header */}
-            <div className="relative overflow-hidden bg-gradient-to-br from-indigo-600 via-blue-600 to-sky-500 p-7 text-center md:p-10">
-              <div className="pointer-events-none absolute inset-0 opacity-20 [background-image:radial-gradient(circle_at_1px_1px,white_1px,transparent_0)] [background-size:22px_22px]" />
-              <div className="pointer-events-none absolute -top-10 right-10 h-40 w-40 rounded-full bg-white/20 blur-2xl animate-float" />
-              <div className="relative flex flex-col items-center">
-                <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15 shadow-lg ring-1 ring-white/40 backdrop-blur-sm animate-float">
-                  <RiAiGenerate2 size={34} className="text-white" />
-                </div>
-                <h1 className="text-3xl font-bold leading-tight text-white md:text-[2.6rem]">
-                  AI Lesson Plan Generator
-                </h1>
-                <p className="mt-3 max-w-xl text-sm font-normal text-white/85 md:text-base">
-                  Turn your teaching ideas into engaging, classroom-ready lesson
-                  plans.
-                </p>
-                <div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-medium text-white ring-1 ring-white/30">
-                  <HiOutlineSparkles className="h-3.5 w-3.5" />
-                  Powered by AI
-                </div>
-              </div>
-            </div>
-
-            <form
-              onSubmit={handleSubmit}
-              className="mx-auto w-full max-w-2xl px-5 py-8 sm:px-8 md:py-10"
-            >
-              {/* Progress */}
-              <div className="mb-7">
-                <div className="mb-2 flex items-center justify-between text-xs font-medium text-gray-500">
-                  <span>Lesson details</span>
-                  <span>{filledCount}/4 completed</span>
-                </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-indigo-100">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-indigo-600 to-sky-500 transition-all duration-500 ease-out"
-                    style={{ width: `${progress}%` }}
-                  />
-                </div>
-              </div>
-
-              {/* Row 1 */}
-              <div className="grid grid-cols-1 gap-5 md:grid-cols-12">
-                <div className="col-span-4 md:col-span-3">
-                  <label className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-gray-800">
-                    <HiOutlineBuildingLibrary className="h-4 w-4 text-indigo-500" />
-                    Board
-                  </label>
-                  <div className="relative">
-                    <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-indigo-500">
-                      <HiOutlineBuildingLibrary className="h-4 w-4" />
-                    </span>
-                    <input
-                      type="text"
-                      value={board}
-                      onChange={(e) => setBoard(e.target.value)}
-                      placeholder="e.g., CBSE"
-                      className={`${inputBase} pr-3`}
-                    />
-                  </div>
-                  {!board.trim() && error("Please enter a board.")}
-                </div>
-
-                <div className="col-span-8 md:col-span-4">
-                  <label className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-gray-800">
-                    <HiOutlineUserGroup className="h-4 w-4 text-indigo-500" />
-                    Class
-                  </label>
-                  <div className="relative">
-                    <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-indigo-500">
-                      <HiOutlineUserGroup className="h-4 w-4" />
-                    </span>
-                    <select
-                      value={klass}
-                      onChange={(e) => setKlass(e.target.value)}
-                      className={`${inputBase} cursor-pointer appearance-none pr-9`}
-                    >
-                      <option value="">Select class</option>
-                      {CLASS_OPTIONS.map((opt) => (
-                        <option key={opt} value={opt}>
-                          {opt}
-                        </option>
-                      ))}
-                    </select>
-                    <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400">
-                      <HiChevronDown className="h-4 w-4" />
-                    </span>
-                  </div>
-                  {!klass.trim() && error("Please choose a class.")}
-                </div>
-
-                <div className="col-span-12 md:col-span-5">
-                  <label className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-gray-800">
-                    <HiOutlineBookOpen className="h-4 w-4 text-indigo-500" />
-                    Subject
-                  </label>
-                  <div className="relative">
-                    <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-indigo-500">
-                      <HiOutlineBookOpen className="h-4 w-4" />
-                    </span>
-                    <input
-                      type="text"
-                      value={subject}
-                      onChange={(e) => setSubject(e.target.value)}
-                      placeholder="e.g., Physics"
-                      className={`${inputBase} pr-3`}
-                    />
-                  </div>
-                  {!subject.trim() && error("Please enter a subject.")}
-                </div>
-
-                {/* Topic */}
-                <div className="col-span-12">
-                  <label className="flex items-center gap-1.5 text-sm font-semibold leading-4 text-gray-800">
-                    <HiOutlinePencilSquare className="h-4 w-4 text-indigo-500" />
-                    Describe the topic
-                  </label>
-                  <p className="text-sm leading-6 text-gray-600">
-                    What are you planning to teach?
-                  </p>
-                  <div className="relative mt-2">
-                    <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-indigo-500">
-                      <HiOutlinePencilSquare className="h-4 w-4" />
-                    </span>
-                    <input
-                      type="text"
-                      value={topic}
-                      onChange={(e) => setTopic(e.target.value)}
-                      placeholder="e.g., Newton's Laws of Motion"
-                      className={`${inputBase} pr-3`}
-                    />
-                  </div>
-                  {!topic.trim() && error("Please enter a topic.")}
-                </div>
-              </div>
-
-              {/* Format */}
-              <div className="mt-7">
-                <span className="flex items-center gap-1.5 text-sm font-semibold leading-4 text-gray-800">
-                  <HiOutlineSparkles className="h-4 w-4 text-indigo-500" />
-                  Format
-                </span>
-                <p className="mb-3 text-sm leading-6 text-gray-600">
-                  What format would you prefer?
-                </p>
-                <div className="grid grid-cols-2 gap-3 md:gap-4">
-                  {FORMATS.map((f) => {
-                    const active = format === f.key;
-                    const Icon = FORMAT_ICONS[f.key] || HiOutlineSparkles;
-                    return (
-                      <button
-                        key={f.key}
-                        type="button"
-                        onClick={() => {
-                          setFormat(f.key);
-                          if (!FORMATS_WITH_HIGH_DETAIL.has(f.key))
-                            setDetailLevel("Outline");
-                        }}
-                        className={`group relative overflow-hidden rounded-2xl border p-4 text-left transition-all duration-200 ${
-                          active
-                            ? "border-indigo-500 bg-gradient-to-br from-indigo-50 to-sky-50 shadow-md ring-1 ring-indigo-300"
-                            : "border-gray-200 bg-white/70 hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-md"
-                        }`}
-                        aria-pressed={active}
-                      >
-                        {active && (
-                          <span className="absolute right-3 top-3 inline-flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-white">
-                            <HiCheck className="h-3.5 w-3.5" />
-                          </span>
-                        )}
-                        <span
-                          className={`inline-flex h-9 w-9 items-center justify-center rounded-xl transition ${
-                            active
-                              ? "bg-indigo-600 text-white"
-                              : "bg-indigo-100 text-indigo-600 group-hover:bg-indigo-200"
-                          }`}
-                        >
-                          <Icon className="h-5 w-5" />
-                        </span>
-                        <div
-                          className={`mt-3 text-base font-semibold ${
-                            active ? "text-indigo-700" : "text-gray-900"
-                          }`}
-                        >
-                          {f.key}
-                        </div>
-                        <div className="mt-1 text-xs leading-5 text-gray-600 md:text-sm">
-                          {f.desc}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Detail (display-only; not in prompt) */}
-              <div className="mt-7">
-                <span className="block text-sm font-semibold text-gray-800">
-                  Level of detail
-                </span>
-                <p className="mb-2 text-sm leading-6 text-gray-600">
-                  {FORMATS_WITH_HIGH_DETAIL.has(format)
-                    ? "What level of detail would you like?"
-                    : "Only Outline is available for this format."}
-                </p>
-                <div className="flex gap-3">
-                  {(FORMATS_WITH_HIGH_DETAIL.has(format)
-                    ? DETAIL
-                    : ["Outline"]
-                  ).map((d) => {
-                    const active = detailLevel === d;
-                    return (
-                      <button
-                        key={d}
-                        type="button"
-                        onClick={() => setDetailLevel(d)}
-                        className={`flex-1 rounded-xl border px-6 py-3 text-sm font-semibold transition ${
-                          active
-                            ? "border-transparent bg-gradient-to-r from-indigo-600 to-sky-500 text-white shadow-md"
-                            : "border-indigo-200 bg-white/70 text-indigo-700 hover:border-indigo-300 hover:bg-indigo-50"
-                        }`}
-                        aria-pressed={active}
-                      >
-                        {d}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Errors + Submit */}
-              <div className="mt-4">
-                {apiError && (
-                  <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
-                    {apiError}
-                  </p>
-                )}
-              </div>
-
-              <div className="mt-8 flex justify-center">
-                <button
-                  type="submit"
-                  className={`group relative w-full overflow-hidden rounded-xl px-10 py-3.5 font-semibold text-white transition ${
-                    isValid
-                      ? "bg-gradient-to-r from-indigo-600 via-blue-600 to-sky-500 shadow-lg shadow-indigo-500/30 hover:shadow-xl hover:shadow-indigo-500/40"
-                      : "cursor-not-allowed bg-gray-300 text-gray-500 shadow-none"
-                  } ${loading ? "cursor-wait" : ""}`}
-                  disabled={!isValid || loading}
-                >
-                  {isValid && !loading && (
-                    <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent group-hover:animate-shimmer" />
-                  )}
-                  <span className="relative flex items-center justify-center gap-2">
-                    {loading ? (
-                      <>
-                        <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/90 border-t-transparent" />
-                        Generating...
-                        <BsStars size={20} className="ml-1" />
-                      </>
-                    ) : (
-                      <>
-                        Generate <BsStars size={20} className="ml-1" />
-                      </>
-                    )}
-                  </span>
-                </button>
-              </div>
-            </form>
+        {/* Decorative background */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 -z-0 overflow-hidden"
+        >
+          <div className="mx-auto flex max-w-6xl justify-between">
+            <div className="h-72 w-72 -translate-x-24 rounded-full bg-indigo-300/25 blur-3xl animate-blob" />
+            <div className="h-72 w-72 translate-x-24 rounded-full bg-sky-300/25 blur-3xl animate-blob [animation-delay:3s]" />
           </div>
         </div>
-      </div>
+
+        <section className="relative z-10 mx-auto w-full max-w-6xl px-4 py-8 sm:px-8 sm:py-10">
+          {/* Page header */}
+          <div className="mb-6 animate-fade-in-up sm:mb-8">
+            <div>
+              <Link
+                href="/dashboard"
+                className="inline-block text-xs font-semibold text-slate-500 transition hover:text-indigo-600"
+              >
+                &larr; Back to dashboard
+              </Link>
+            </div>
+            <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white px-4 py-2 text-sm font-semibold text-sky-700 shadow-sm">
+              <HiOutlineSparkles className="h-4 w-4" />
+              Powered by LessonPilot AI
+            </div>
+            <h1 className="mt-4 text-3xl font-bold leading-tight text-slate-950 sm:text-4xl md:text-5xl">
+              AI Lesson Plan Generator
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-600 md:text-base">
+              Turn your teaching ideas into engaging, classroom-ready lesson
+              plans. Fill in the details below and generate in seconds.
+            </p>
+          </div>
+
+          <div className="grid gap-5 lg:grid-cols-12 lg:gap-6">
+            {/* ---------- Form ---------- */}
+            <form
+              id="lp-form"
+              onSubmit={handleSubmit}
+              className="animate-fade-in-up lg:col-span-8"
+            >
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <span
+                  aria-hidden="true"
+                  className="block h-1 bg-gradient-to-r from-indigo-600 to-sky-500"
+                />
+
+                <div className="p-5 sm:p-7">
+                  {/* Step 1 — details */}
+                  <SectionHeading
+                    step="1"
+                    title="Lesson details"
+                    hint="Tell us what you are teaching and to whom."
+                  />
+
+                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                    <Field
+                      label="Board"
+                      error={!board.trim() && error("Please choose a board.")}
+                    >
+                      <SelectDropdown
+                        value={board}
+                        onChange={setBoard}
+                        options={BOARD_OPTIONS}
+                        placeholder="Select board"
+                        ariaLabel="Board"
+                        invalid={touched && !board.trim()}
+                      />
+                    </Field>
+
+                    <Field
+                      label="Class"
+                      error={!klass.trim() && error("Please choose a class.")}
+                    >
+                      <SelectDropdown
+                        value={klass}
+                        onChange={setKlass}
+                        options={CLASS_OPTIONS}
+                        placeholder="Select class"
+                        ariaLabel="Class"
+                        invalid={touched && !klass.trim()}
+                      />
+                    </Field>
+
+                    <Field
+                      label="Subject"
+                      error={!subject.trim() && error("Please enter a subject.")}
+                    >
+                      <input
+                        type="text"
+                        value={subject}
+                        onChange={(e) => setSubject(e.target.value)}
+                        placeholder="e.g., Physics"
+                        className={inputBase}
+                      />
+                    </Field>
+
+                    <Field
+                      label="Topic"
+                      hint=""
+                      error={!topic.trim() && error("Please enter a topic.")}
+                    >
+                      <input
+                        type="text"
+                        value={topic}
+                        onChange={(e) => setTopic(e.target.value)}
+                        placeholder="e.g., Newton's Laws of Motion"
+                        className={inputBase}
+                      />
+                      <span className="text-xs text-slate-400">
+                        What are you planning to teach?
+                      </span>
+                    </Field>
+                  </div>
+
+                  <div className="my-7 border-t border-dashed border-slate-200" />
+
+                  {/* Step 2 — format */}
+                  <SectionHeading
+                    step="2"
+                    title="Format"
+                    hint="What structure would you prefer?"
+                  />
+
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:gap-4">
+                    {FORMATS.map((f) => {
+                      const active = format === f.key;
+                      const Icon = FORMAT_ICONS[f.key] || HiOutlineSparkles;
+                      return (
+                        <button
+                          key={f.key}
+                          type="button"
+                          onClick={() => {
+                            setFormat(f.key);
+                            if (!FORMATS_WITH_HIGH_DETAIL.has(f.key))
+                              setDetailLevel("Outline");
+                          }}
+                          className={`group relative overflow-hidden rounded-2xl border p-4 text-left transition-all duration-200 ${
+                            active
+                              ? "border-indigo-500 bg-gradient-to-br from-indigo-50 to-sky-50 shadow-md ring-1 ring-indigo-300"
+                              : "border-gray-200 bg-white hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-md"
+                          }`}
+                          aria-pressed={active}
+                        >
+                          {active && (
+                            <span className="absolute right-3 top-3 inline-flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-white">
+                              <HiCheck className="h-3.5 w-3.5" />
+                            </span>
+                          )}
+                          <span
+                            className={`inline-flex h-9 w-9 items-center justify-center rounded-xl transition ${
+                              active
+                                ? "bg-indigo-600 text-white"
+                                : "bg-indigo-100 text-indigo-600 group-hover:bg-indigo-200"
+                            }`}
+                          >
+                            <Icon className="h-5 w-5" />
+                          </span>
+                          <div
+                            className={`mt-3 text-base font-semibold ${
+                              active ? "text-indigo-700" : "text-gray-900"
+                            }`}
+                          >
+                            {f.key}
+                          </div>
+                          <div className="mt-1 text-xs leading-5 text-gray-600 md:text-sm">
+                            {f.desc}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="my-7 border-t border-dashed border-slate-200" />
+
+                  {/* Step 3 — detail (display-only; not in prompt) */}
+                  <SectionHeading
+                    step="3"
+                    title="Level of detail"
+                    hint={
+                      FORMATS_WITH_HIGH_DETAIL.has(format)
+                        ? "How deep should the plan go?"
+                        : "Only Outline is available for this format."
+                    }
+                  />
+
+                  <div className="flex gap-3">
+                    {(FORMATS_WITH_HIGH_DETAIL.has(format)
+                      ? DETAIL
+                      : ["Outline"]
+                    ).map((d) => {
+                      const active = detailLevel === d;
+                      return (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => setDetailLevel(d)}
+                          className={`flex-1 rounded-xl border px-6 py-3 text-sm font-semibold transition ${
+                            active
+                              ? "border-transparent bg-gradient-to-r from-indigo-600 to-sky-500 text-white shadow-md"
+                              : "border-indigo-200 bg-white text-indigo-700 hover:border-indigo-300 hover:bg-indigo-50"
+                          }`}
+                          aria-pressed={active}
+                        >
+                          {d}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {apiError && (
+                    <p className="mt-6 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+                      {apiError}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Submit — mobile keeps it inline under the card */}
+              <div className="mt-5 lg:hidden">
+                <GenerateButton isValid={isValid} loading={loading} />
+              </div>
+            </form>
+
+            {/* ---------- Summary rail ---------- */}
+            <aside className="animate-fade-in-up lg:col-span-4">
+              <div className="lg:sticky lg:top-24">
+                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white/80 shadow-sm backdrop-blur">
+                  <div className="relative overflow-hidden bg-gradient-to-br from-indigo-600 via-blue-600 to-sky-500 px-5 py-4">
+                    <div className="pointer-events-none absolute inset-0 opacity-20 [background-image:radial-gradient(circle_at_1px_1px,white_1px,transparent_0)] [background-size:16px_16px]" />
+                    <div className="relative">
+                      <p className="text-sm font-bold text-white">Your plan</p>
+                      <p className="mt-0.5 text-xs text-white/80">
+                        {filledCount}/4 details completed
+                      </p>
+                      <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/25">
+                        <div
+                          className="h-full rounded-full bg-white transition-all duration-500 ease-out"
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="px-5 py-3">
+                    <SummaryRow label="Board" value={board} />
+                    <SummaryRow label="Class" value={classLabel} />
+                    <SummaryRow label="Subject" value={subject.trim()} />
+                    <SummaryRow label="Topic" value={topic.trim()} />
+                    <SummaryRow label="Format" value={format} />
+                    <SummaryRow label="Detail" value={detailLevel} />
+                  </div>
+
+                  <div className="hidden px-5 pb-5 lg:block">
+                    <GenerateButton isValid={isValid} loading={loading} />
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-2xl border border-slate-200 bg-white/80 p-5 shadow-sm backdrop-blur">
+                  <p className="text-sm font-bold text-slate-900">
+                    Tips for a better plan
+                  </p>
+                  <ul className="mt-3 space-y-2.5">
+                    {TIPS.map((tip) => (
+                      <li
+                        key={tip}
+                        className="flex gap-2.5 text-xs leading-5 text-slate-600"
+                      >
+                        <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-gradient-to-br from-indigo-600 to-sky-500" />
+                        {tip}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </section>
+      </main>
       <AuthModal />
     </>
   );
 };
 
-export default LessonPlanGenerator;
+/* Rendered twice — inline under the card on mobile, in the summary rail on
+   desktop. The rail copy sits outside the <form>, so both rely on form="lp-form"
+   to submit. */
+const GenerateButton = ({ isValid, loading }) => (
+  <button
+    type="submit"
+    form="lp-form"
+    className={`group relative w-full overflow-hidden rounded-xl px-8 py-3.5 font-semibold text-white transition ${
+      isValid
+        ? "bg-gradient-to-r from-indigo-600 via-blue-600 to-sky-500 shadow-lg shadow-indigo-500/30 hover:shadow-xl hover:shadow-indigo-500/40"
+        : "cursor-not-allowed bg-gray-300 text-gray-500 shadow-none"
+    } ${loading ? "cursor-wait" : ""}`}
+    disabled={!isValid || loading}
+  >
+    {isValid && !loading && (
+      <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent group-hover:animate-shimmer" />
+    )}
+    <span className="relative flex items-center justify-center gap-2">
+      {loading ? (
+        <>
+          <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/90 border-t-transparent" />
+          Generating...
+          <BsStars size={20} className="ml-1" />
+        </>
+      ) : (
+        <>
+          Generate <BsStars size={20} className="ml-1" />
+        </>
+      )}
+    </span>
+  </button>
+);
 
+export default LessonPlanGenerator;

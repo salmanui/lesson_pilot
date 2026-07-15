@@ -12,7 +12,7 @@ import {
   LuPencilLine,
 } from "react-icons/lu";
 import { UserContext } from "@/src/utils/userContext";
-import DashboardUserMenu from "@/src/components/dashboard/DashboardUserMenu";
+import DashboardNavbar from "@/src/components/dashboard/DashboardNavbar";
 
 const tools = [
   {
@@ -63,18 +63,7 @@ export default function TeacherToolsHome() {
   return (
     <main className="relative min-h-screen bg-[#f7fbff] text-slate-950">
       {/* Top navigation */}
-      <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/80 backdrop-blur-md">
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3 sm:px-8 sm:py-3.5">
-          <Link href="/" className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-sky-500 text-white shadow-lg shadow-indigo-500/25">
-              <BsStars className="h-5 w-5" />
-            </div>
-            <span className="text-base font-bold text-slate-900">LessonPilot</span>
-          </Link>
-
-          <DashboardUserMenu />
-        </div>
-      </header>
+      <DashboardNavbar />
 
       {/* Decorative background */}
       <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 -z-0 overflow-hidden">
@@ -89,13 +78,13 @@ export default function TeacherToolsHome() {
         <div className="mb-8 sm:mb-10">
           <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white px-4 py-2 text-sm font-semibold text-sky-700 shadow-sm">
             <BsStars className="h-4 w-4" />
-            AI Tools
+            LessonPilot AI Tools
           </div>
           <h1 className="text-3xl font-bold leading-tight text-slate-950 sm:text-4xl md:text-5xl">
             Welcome back, {firstName} 👋
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-600 sm:mt-4 md:text-base">
-            Plan lessons and generate tests faster with AI. Choose a tool below to prepare
+            Plan lessons and generate tests faster with LessonPilot AI. Choose a tool below to prepare
             classroom-ready teaching material.
           </p>
         </div>
