@@ -2,7 +2,7 @@
 
 import { useContext, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { FiGrid, FiLogOut } from "react-icons/fi";
+import { FiGrid, FiLogOut, FiPhone, FiBriefcase } from "react-icons/fi";
 import { UserContext } from "@/src/utils/userContext";
 import { getInitials } from "@/src/utils/userInitials";
 
@@ -79,12 +79,29 @@ export default function UserAvatarMenu({
         {open && (
           <div
             role="menu"
-            className="absolute right-0 mt-2 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-xl shadow-slate-900/10"
+            className="absolute right-0 mt-2 w-64 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-xl shadow-slate-900/10"
           >
             <div className="border-b border-slate-100 px-4 py-3">
               <p className="truncate text-sm font-semibold text-slate-900">{displayName}</p>
               {user.email && (
                 <p className="truncate text-xs text-slate-500">{user.email}</p>
+              )}
+
+              {(user.mobileNumber || user.organizationName) && (
+                <div className="mt-2 space-y-1">
+                  {user.mobileNumber && (
+                    <p className="flex items-center gap-1.5 text-xs text-slate-500">
+                      <FiPhone className="h-3 w-3 shrink-0 text-slate-400" />
+                      <span className="truncate">{user.mobileNumber}</span>
+                    </p>
+                  )}
+                  {user.organizationName && (
+                    <p className="flex items-center gap-1.5 text-xs text-slate-500">
+                      <FiBriefcase className="h-3 w-3 shrink-0 text-slate-400" />
+                      <span className="truncate">{user.organizationName}</span>
+                    </p>
+                  )}
+                </div>
               )}
             </div>
 

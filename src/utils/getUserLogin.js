@@ -1,20 +1,11 @@
-import axios from "axios";
-// Get base URL from .env file
-const baseUrl = process.env.NEXT_PUBLIC_API_URL;
-// Utility function to handle the API POST request for user registration
-export const loginUser = async (formData) => {
-  const url = `${baseUrl}/api/Registration/QeebLogin`;
-  try {
-    const response = await axios.post(url, formData, {
-      headers: {
-        "Content-Type": "application/json",
-        accept: "*/*",
-      },
-    });
-    return response.data; // Assuming successful response returns the response data
-  } catch (error) {
-    console.error("Error while user login:", error);
-    throw new Error("User login failed");
-  }
-};
+import { postAuth } from "./auth/authClient";
 
+/**
+ * POST /api/auth/signin
+ * Body: { emailOrPhone, password }
+ *
+ * `emailOrPhone` accepts either identifier. Inactive accounts are rejected with
+ * 403 "Inactive user." even when the password is correct.
+ */
+export const loginUser = async ({ emailOrPhone, password }) =>
+  postAuth("/api/auth/signin", { emailOrPhone, password }, "User login failed");

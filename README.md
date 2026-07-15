@@ -2,7 +2,7 @@
 
 **LessonPilot** is an AI-powered web app that helps teachers **plan lessons and
 generate tests faster**. It ships with a public marketing landing page, a full
-authentication flow (email/password + Google SSO / One Tap), and a login-gated
+authentication flow (email/password), and a login-gated
 dashboard that hosts the AI teaching tools.
 
 > **Brand vs. module:** *LessonPilot* is the product/company brand (logo wordmark,
@@ -32,7 +32,7 @@ dashboard that hosts the AI teaching tools.
 | Route | Page | Access |
 |-------|------|--------|
 | `/` | Public marketing landing page | **Public** |
-| `/login` | Sign in (email/password + Google) | Public |
+| `/login` | Sign in (email/password) | Public |
 | `/register` | Create account | Public |
 | `/dashboard` | AI Tools home (tool launcher) | **Gated** |
 | `/ai-test-generator` | AI Test Generator tool | **Gated** |
@@ -69,12 +69,14 @@ otherwise it shows **"Log in"** and **"Get started"**.
 - A single `AuthPage` component with a **Sign in / Register** segmented toggle,
   mounted at both `/login` and `/register` (each route sets the initial mode).
 - **Email/password login** and **registration** reusing the existing API utils.
-- **Google SSO + Google One Tap** via Google Identity Services (GSI).
 - **Route gating** so tools are only reachable after login.
 
 ### Login
 - Fields: **Email or phone** + **Password** (with show/hide toggle, "Remember me").
-- Calls `loginUser({ userName, password })` → `POST /api/Registration/QeebLogin`.
+- Calls `loginUser({ emailOrPhone, password })` → `POST /api/auth/signin`.
+- Success returns `{ success, message, accessToken, expiresAtUtc, user }`; the
+  profile and token are flattened by `buildUserPayload` and stored in `localStorage`.
+- Inactive accounts are rejected with **403** even when the password is correct.
 
 ### Register
 Fields collected (all validated):
@@ -84,25 +86,14 @@ Fields collected (all validated):
 - **School / Organization Name**
 - **Password** (with a live strength meter)
 
-Calls `registerUser({ name, email, mobileNumber, organizationName, password })`
-→ `POST /api/Registration/QeebSignup`.
+Calls `registerUser({ email, userName, phoneNumber, schoolOrganization, password })`
+→ `POST /api/auth/register`. Password must be at least 8 characters.
 
-> Note: `organizationName` is a **new field** added to the signup payload for the
-> School/Organization requirement. Confirm/adjust the field name once the backend
-> contract is finalized.
-
-### Google SSO / One Tap
-- Implemented in `src/components/auth/GoogleAuthButton.jsx`.
-- Loads the GSI script, renders the official Google button, and triggers **One Tap**
-  (`google.accounts.id.prompt()`).
-- On credential, `AuthPage` decodes the Google ID token (JWT) for the profile and
-  calls `googleLogin(idToken)` → `POST /api/Registration/QeebGoogleLogin` *(placeholder
-  endpoint — update when backend is ready)*.
-- **Graceful fallbacks:**
-  - No `NEXT_PUBLIC_GOOGLE_CLIENT_ID` configured → a styled "Continue with Google"
-    button shows and explains SSO isn't set up yet.
-  - Backend endpoint not ready → the verified Google profile (name/email/picture)
-    is used so the flow still completes end-to-end during development.
+> **Registration is not a sign-in.** The API returns `{ success, message }` with no
+> user object and no token: new accounts stay **inactive until an administrator
+> activates them**, and signing in before then fails with 403. The register screens
+> therefore show the API's message and switch to the sign-in form rather than
+> redirecting into the app.
 
 ### Session model (important)
 - Auth state lives in **`UserContext`** and is persisted to **`localStorage`** under
@@ -153,12 +144,10 @@ src/components/auth/InputField.jsx     # reusable input (icon, error, password t
 src/components/auth/SubmitButton.jsx   # gradient button + loading spinner
 src/components/auth/StatusBanner.jsx   # success/error banner
 src/components/auth/PasswordStrength.jsx # live password strength meter
-src/components/auth/GoogleAuthButton.jsx # Google SSO + One Tap (with fallbacks)
 src/components/auth/RequireAuth.jsx    # route guard (loader → redirect if no user)
 
 src/utils/auth/validators.js          # email/phone/password validation + strength
-src/utils/auth/googleAuth.js          # decodeJwt() + googleLogin() API util
-src/utils/auth/userPayload.js         # normalizes API/Google response → user object
+src/utils/auth/userPayload.js         # normalizes the API response → user object
 ```
 
 ### Added — landing & dashboard
@@ -186,25 +175,52 @@ src/components/TeacherToolsHome.jsx  # added header: greeting + "Sign out" butto
 src/utils/userContext.js      # exposed `hasLoadedUser` for the guard
 tailwind.config.js            # added keyframes/animations: blob, float, fade-in, fade-in-up, shimmer
 styles/globals.css            # added html { scroll-behavior: smooth }
-.env                          # documented NEXT_PUBLIC_GOOGLE_CLIENT_ID (commented placeholder)
 ```
 
 ---
 
 ## API integration
 
-All auth calls use `axios` and read the base URL from `NEXT_PUBLIC_API_URL`.
+Auth runs on its **own host**, separate from AI generation:
+
+- `NEXT_PUBLIC_AUTH_API_URL` — auth service; serves only `/api/auth/*`.
+- `NEXT_PUBLIC_API_URL` — Qeeb backend; serves lesson-plan/test generation.
+
+The two are **not interchangeable** — the auth host 404s on the generation
+endpoints and vice versa, so keep them as separate variables.
 
 | Action | Util | Endpoint | Payload |
 |--------|------|----------|---------|
-| Login | `loginUser` (`src/utils/getUserLogin.js`) | `POST /api/Registration/QeebLogin` | `{ userName, password }` |
-| Register | `registerUser` (`src/utils/userRegistration.js`) | `POST /api/Registration/QeebSignup` | `{ name, email, mobileNumber, organizationName, password }` |
-| Change password | `updateUserPassword` (`src/utils/updateUserPassword.js`) | `POST /api/Registration/QeebChangePassword` | `{ userName, oldPassword, newPassword }` |
-| Google login | `googleLogin` (`src/utils/auth/googleAuth.js`) | `POST /api/Registration/QeebGoogleLogin` *(placeholder)* | `{ idToken }` |
+| Login | `loginUser` (`src/utils/getUserLogin.js`) | `POST /api/auth/signin` | `{ emailOrPhone, password }` |
+| Register | `registerUser` (`src/utils/userRegistration.js`) | `POST /api/auth/register` | `{ email, userName, phoneNumber, schoolOrganization, password }` |
 
-The response shape is normalized by `buildUserPayload()` so varying API/Google field
-names (`name`/`fullName`, `mobileNumber`/`phoneNumber`, `id`/`userId`/`sub`, etc.)
-map to one consistent user object.
+Both go through `postAuth()` (`src/utils/auth/authClient.js`), which unwraps the
+`{ success, message, ... }` envelope and preserves the API's own message
+("Email is already registered.", "Inactive user.") for the UI to show.
+
+### Why auth is proxied (CORS)
+
+The auth API sends **no `Access-Control-Allow-Origin` header** and answers preflight
+`OPTIONS` with **405**, so a direct browser call is blocked and surfaces as an
+opaque axios `Network Error`. (curl/Node are unaffected — they don't enforce CORS.)
+
+`next.config.js` therefore rewrites `/api/auth/:path*` to the auth host, so browser
+requests stay **same-origin** and never trigger CORS. `postAuth()` uses a relative
+URL in the browser and the absolute host only on the server.
+
+> This means `NEXT_PUBLIC_AUTH_API_URL` **must be set in the deployment environment**
+> (e.g. Vercel) — the rewrite is skipped when it is missing and `/api/auth/*` 404s.
+>
+> The proper fix is enabling CORS on the API for the site's origins, after which the
+> rewrite can be removed and the client can call the host directly.
+
+The response is normalized by `buildUserPayload()` so varying API field names
+(`name`/`fullName`/`userName`, `mobileNumber`/`phoneNumber`,
+`organizationName`/`schoolOrganization`, `id`/`userId`/`sub`) map to one
+consistent user object, with `accessToken`/`expiresAtUtc` lifted off the envelope.
+
+> The API also exposes `POST /api/auth/google-signin` (`{ idToken }`), which the
+> app does not currently use. There is **no change-password endpoint**.
 
 ---
 
@@ -213,19 +229,19 @@ map to one consistent user object.
 `.env` (project root):
 
 ```bash
+# Backend that serves AI generation (lesson plans, tests).
 NEXT_PUBLIC_API_URL=https://devapi.qeeb.in
+# Auth service — separate host, serves only /api/auth/*.
+NEXT_PUBLIC_AUTH_API_URL=https://lessionplanapi.runasp.net
 # Public site origin — used for canonical URLs, Open Graph, sitemap & JSON-LD.
 # NEXT_PUBLIC_SITE_URL=https://lessonpilot.com
-# Google SSO / One Tap — set this to enable the Google Sign-In button.
-# NEXT_PUBLIC_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 ```
 
-- `NEXT_PUBLIC_API_URL` — backend base URL for all auth calls.
+- `NEXT_PUBLIC_API_URL` — base URL for AI generation calls (lesson plans, tests).
+- `NEXT_PUBLIC_AUTH_API_URL` — base URL for all auth calls (`/api/auth/*`).
 - `NEXT_PUBLIC_SITE_URL` — **production origin** (no trailing slash). Drives canonical
   URLs, Open Graph/Twitter tags, the sitemap and JSON-LD `@id`s. Falls back to
   `http://localhost:3000` in development. **Set this before going live.**
-- `NEXT_PUBLIC_GOOGLE_CLIENT_ID` — required to activate Google SSO / One Tap.
-  Until set, the fallback Google button is shown.
 
 ---
 
@@ -289,7 +305,7 @@ npm run lint     # eslint
 - **Custom animations** (in `tailwind.config.js`): `animate-blob`, `animate-float`,
   `animate-fade-in`, `animate-fade-in-up`, `animate-shimmer`.
 - **Reusable UI:** `InputField`, `SubmitButton`, `StatusBanner`, `PasswordStrength`,
-  `GoogleAuthButton`, `SectionHeading`, `RequireAuth`.
+  `SectionHeading`, `RequireAuth`.
 - **Validation, loading & feedback:** every form validates per-field, disables inputs
   and shows a spinner while submitting, and surfaces success/error banners.
 - **Responsiveness:** all pages tested across desktop / tablet / mobile breakpoints.
@@ -298,9 +314,9 @@ npm run lint     # eslint
 
 ## Known TODOs / follow-ups
 
-- [ ] Set `NEXT_PUBLIC_GOOGLE_CLIENT_ID` and confirm the Google login endpoint/payload.
 - [ ] Replace landing **placeholder** stats & testimonials with real content.
-- [ ] Wire the **Forgot password** link (a `updateUserPassword` util already exists).
+- [ ] Wire the **Forgot password** link (needs a backend endpoint — the auth API
+      does not currently expose one).
 - [ ] (Optional) Add server-side protection (cookies + Next.js middleware) once the
       backend issues real sessions/tokens.
 - [ ] Confirm the `organizationName` signup field name with the backend.

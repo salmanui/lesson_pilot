@@ -2,7 +2,7 @@ import RequireAuth from "@/src/components/auth/RequireAuth";
 import AITestGeneratorPage from "@/src/components/ai/AITestGeneratorPage";
 
 export const metadata = {
-  title: "AI Test Generator",
+  title: "AI Generator Tests  — LessonPilot",
   description: "Generate printable classroom tests and answer keys with AI.",
   robots: { index: false, follow: false },
 };

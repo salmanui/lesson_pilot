@@ -4,6 +4,20 @@ import React, { useContext, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { BsStars } from "react-icons/bs";
 import { RiAiGenerate2 } from "react-icons/ri";
+import {
+  HiOutlineBuildingLibrary,
+  HiOutlineUserGroup,
+  HiOutlineBookOpen,
+  HiOutlinePencilSquare,
+  HiOutlineClipboardDocumentList,
+  HiOutlineSquares2X2,
+  HiOutlineBeaker,
+  HiOutlineMagnifyingGlass,
+  HiOutlineAcademicCap,
+  HiOutlineSparkles,
+  HiChevronDown,
+  HiCheck,
+} from "react-icons/hi2";
 import { fetchLessonPlan } from "../../utils/ai/lessonPlanApi";
 import { useRouter } from "next/navigation";
 import { UserContext } from "../../utils/userContext";
@@ -38,6 +52,15 @@ const FORMATS = [
 
 const DETAIL = ["High Detail", "Outline"]; // kept only for UI; not used in prompt line
 const FORMATS_WITH_HIGH_DETAIL = new Set(["5-Part", "4-Part"]);
+
+// UI-only: icon per format (keyed by FORMATS[].key, does not affect prompt)
+const FORMAT_ICONS = {
+  "5-Part": HiOutlineClipboardDocumentList,
+  "4-Part": HiOutlineSquares2X2,
+  "5E": HiOutlineBeaker,
+  "Inquiry-Based": HiOutlineMagnifyingGlass,
+  UDL: HiOutlineAcademicCap,
+};
 
 const DEFAULT_SPACE = "K-12 School";
 const DEFAULT_TONE = ["Informative", "Academic", "Direct"];
@@ -109,6 +132,16 @@ const LessonPlanGenerator = ({ onSubmit }) => {
 
   const error = (msg) =>
     touched ? <p className="mt-1 text-xs text-red-600">{msg}</p> : null;
+
+  // UI-only: progress across the four required text fields
+  const filledCount = [board, klass, subject, topic].filter((v) =>
+    v.trim()
+  ).length;
+  const progress = (filledCount / 4) * 100;
+
+  // Shared input styling (leading icon padding baked in via pl-10)
+  const inputBase =
+    "w-full rounded-xl border border-gray-200 bg-white/80 pl-10 py-2.5 text-sm text-gray-900 placeholder-gray-400 shadow-sm transition focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-indigo-500/15";
 
   const requireGenerationAccess = () => {
     if (!user) return false;
@@ -234,105 +267,163 @@ const LessonPlanGenerator = ({ onSubmit }) => {
 
   return (
     <>
-      <div className="w-full overflow-hidden font-lato">
-        <div className="h-screen overflow-auto py-6 px-3 md:p-10 relative z-[1]">
-          <div className="bg-white max-w-3xl mx-auto rounded-lg">
-            <div className="bg-[#e4d7ff] md:p-8 p-6 rounded-t-lg">
-              <div className="flex flex-col items-center">
-                <RiAiGenerate2 size={48} />
-                <h1 className="text-3xl md:text-4xl font-semibold text-black my-3 text-center">
+      <div className="relative w-full overflow-hidden font-lato">
+        {/* Decorative animated background */}
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-slate-50 via-indigo-50 to-sky-100" />
+        <div className="pointer-events-none absolute -left-24 -top-24 h-80 w-80 rounded-full bg-indigo-300/40 blur-3xl animate-blob" />
+        <div className="pointer-events-none absolute top-1/3 -right-24 h-96 w-96 rounded-full bg-sky-300/40 blur-3xl animate-blob [animation-delay:3s]" />
+        <div className="pointer-events-none absolute -bottom-16 left-1/3 h-80 w-80 rounded-full bg-blue-300/40 blur-3xl animate-blob [animation-delay:6s]" />
+
+        <div className="relative z-[1] h-screen overflow-auto px-3 py-8 md:p-10">
+          <div className="mx-auto max-w-3xl animate-fade-in-up overflow-hidden rounded-3xl border border-white/60 bg-white/70 shadow-[0_20px_60px_-15px_rgba(76,29,149,0.25)] backdrop-blur-xl">
+            {/* Header */}
+            <div className="relative overflow-hidden bg-gradient-to-br from-indigo-600 via-blue-600 to-sky-500 p-7 text-center md:p-10">
+              <div className="pointer-events-none absolute inset-0 opacity-20 [background-image:radial-gradient(circle_at_1px_1px,white_1px,transparent_0)] [background-size:22px_22px]" />
+              <div className="pointer-events-none absolute -top-10 right-10 h-40 w-40 rounded-full bg-white/20 blur-2xl animate-float" />
+              <div className="relative flex flex-col items-center">
+                <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15 shadow-lg ring-1 ring-white/40 backdrop-blur-sm animate-float">
+                  <RiAiGenerate2 size={34} className="text-white" />
+                </div>
+                <h1 className="text-3xl font-bold leading-tight text-white md:text-[2.6rem]">
                   AI Lesson Plan Generator
                 </h1>
-                <p className="md:text-base text-sm font-normal text-center max-w-xl">
-                  Turn your teaching ideas into engaging, classroom-ready
-                  lesson plans.
+                <p className="mt-3 max-w-xl text-sm font-normal text-white/85 md:text-base">
+                  Turn your teaching ideas into engaging, classroom-ready lesson
+                  plans.
                 </p>
+                <div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-medium text-white ring-1 ring-white/30">
+                  <HiOutlineSparkles className="h-3.5 w-3.5" />
+                  Powered by AI
+                </div>
               </div>
             </div>
 
             <form
               onSubmit={handleSubmit}
-              className="w-full max-w-md mx-auto py-5 md:py-10 px-5 sm:px-0"
+              className="mx-auto w-full max-w-2xl px-5 py-8 sm:px-8 md:py-10"
             >
+              {/* Progress */}
+              <div className="mb-7">
+                <div className="mb-2 flex items-center justify-between text-xs font-medium text-gray-500">
+                  <span>Lesson details</span>
+                  <span>{filledCount}/4 completed</span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-indigo-100">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-indigo-600 to-sky-500 transition-all duration-500 ease-out"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+              </div>
+
               {/* Row 1 */}
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-5 md:gap-5">
-                <div className="md:col-span-3 col-span-4">
-                  <label className="block text-sm font-semibold text-gray-800 mb-1.5">
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-12">
+                <div className="col-span-4 md:col-span-3">
+                  <label className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-gray-800">
+                    <HiOutlineBuildingLibrary className="h-4 w-4 text-indigo-500" />
                     Board
                   </label>
-                  <input
-                    type="text"
-                    value={board}
-                    onChange={(e) => setBoard(e.target.value)}
-                    placeholder="e.g., CBSE"
-                    className="w-full rounded-lg text-sm border border-gray-300 bg-white px-3 py-2 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-                  />
+                  <div className="relative">
+                    <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-indigo-500">
+                      <HiOutlineBuildingLibrary className="h-4 w-4" />
+                    </span>
+                    <input
+                      type="text"
+                      value={board}
+                      onChange={(e) => setBoard(e.target.value)}
+                      placeholder="e.g., CBSE"
+                      className={`${inputBase} pr-3`}
+                    />
+                  </div>
                   {!board.trim() && error("Please enter a board.")}
                 </div>
 
-                <div className="md:col-span-4 col-span-8">
-                  <label className="block text-sm font-semibold text-gray-800 mb-1.5">
+                <div className="col-span-8 md:col-span-4">
+                  <label className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-gray-800">
+                    <HiOutlineUserGroup className="h-4 w-4 text-indigo-500" />
                     Class
                   </label>
-                  <select
-                    value={klass}
-                    onChange={(e) => setKlass(e.target.value)}
-                    className="w-full rounded-lg text-sm border border-gray-300 bg-white px-3 py-2 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-                  >
-                    <option value="">Select class</option>
-                    {CLASS_OPTIONS.map((opt) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-indigo-500">
+                      <HiOutlineUserGroup className="h-4 w-4" />
+                    </span>
+                    <select
+                      value={klass}
+                      onChange={(e) => setKlass(e.target.value)}
+                      className={`${inputBase} cursor-pointer appearance-none pr-9`}
+                    >
+                      <option value="">Select class</option>
+                      {CLASS_OPTIONS.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400">
+                      <HiChevronDown className="h-4 w-4" />
+                    </span>
+                  </div>
                   {!klass.trim() && error("Please choose a class.")}
                 </div>
 
-                <div className="md:col-span-5 col-span-12">
-                  <label className="block text-sm font-semibold text-gray-800 mb-1.5">
+                <div className="col-span-12 md:col-span-5">
+                  <label className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-gray-800">
+                    <HiOutlineBookOpen className="h-4 w-4 text-indigo-500" />
                     Subject
                   </label>
-                  <input
-                    type="text"
-                    value={subject}
-                    onChange={(e) => setSubject(e.target.value)}
-                    placeholder="e.g., Physics"
-                    className="w-full rounded-lg border text-sm border-gray-300 bg-white px-3 py-2 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-                  />
+                  <div className="relative">
+                    <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-indigo-500">
+                      <HiOutlineBookOpen className="h-4 w-4" />
+                    </span>
+                    <input
+                      type="text"
+                      value={subject}
+                      onChange={(e) => setSubject(e.target.value)}
+                      placeholder="e.g., Physics"
+                      className={`${inputBase} pr-3`}
+                    />
+                  </div>
                   {!subject.trim() && error("Please enter a subject.")}
                 </div>
 
                 {/* Topic */}
                 <div className="col-span-12">
-                  <label className="block leading-4 text-sm font-semibold text-gray-800">
+                  <label className="flex items-center gap-1.5 text-sm font-semibold leading-4 text-gray-800">
+                    <HiOutlinePencilSquare className="h-4 w-4 text-indigo-500" />
                     Describe the topic
                   </label>
-                  <p className="text-gray-600 leading-6 text-sm">
+                  <p className="text-sm leading-6 text-gray-600">
                     What are you planning to teach?
                   </p>
-                  <input
-                    type="text"
-                    value={topic}
-                    onChange={(e) => setTopic(e.target.value)}
-                    placeholder="e.g., Newton's Laws of Motion"
-                    className="w-full mt-2 rounded-lg border text-sm border-gray-300 bg-white px-3 py-2 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-                  />
+                  <div className="relative mt-2">
+                    <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-indigo-500">
+                      <HiOutlinePencilSquare className="h-4 w-4" />
+                    </span>
+                    <input
+                      type="text"
+                      value={topic}
+                      onChange={(e) => setTopic(e.target.value)}
+                      placeholder="e.g., Newton's Laws of Motion"
+                      className={`${inputBase} pr-3`}
+                    />
+                  </div>
                   {!topic.trim() && error("Please enter a topic.")}
                 </div>
               </div>
 
               {/* Format */}
-              <div className="mt-6">
-                <span className="block leading-4 text-sm font-semibold text-gray-800">
+              <div className="mt-7">
+                <span className="flex items-center gap-1.5 text-sm font-semibold leading-4 text-gray-800">
+                  <HiOutlineSparkles className="h-4 w-4 text-indigo-500" />
                   Format
                 </span>
-                <p className="text-gray-600 leading-6 text-sm mb-2">
+                <p className="mb-3 text-sm leading-6 text-gray-600">
                   What format would you prefer?
                 </p>
-                <div className="grid grid-cols-2 gap-4 md:gap-6">
+                <div className="grid grid-cols-2 gap-3 md:gap-4">
                   {FORMATS.map((f) => {
                     const active = format === f.key;
+                    const Icon = FORMAT_ICONS[f.key] || HiOutlineSparkles;
                     return (
                       <button
                         key={f.key}
@@ -342,21 +433,35 @@ const LessonPlanGenerator = ({ onSubmit }) => {
                           if (!FORMATS_WITH_HIGH_DETAIL.has(f.key))
                             setDetailLevel("Outline");
                         }}
-                        className={`text-left rounded-lg border p-4 transition ${
+                        className={`group relative overflow-hidden rounded-2xl border p-4 text-left transition-all duration-200 ${
                           active
-                            ? "border-violet-600 bg-violet-50"
-                            : "border-gray-300 hover:border-violet-400"
+                            ? "border-indigo-500 bg-gradient-to-br from-indigo-50 to-sky-50 shadow-md ring-1 ring-indigo-300"
+                            : "border-gray-200 bg-white/70 hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-md"
                         }`}
                         aria-pressed={active}
                       >
+                        {active && (
+                          <span className="absolute right-3 top-3 inline-flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-white">
+                            <HiCheck className="h-3.5 w-3.5" />
+                          </span>
+                        )}
+                        <span
+                          className={`inline-flex h-9 w-9 items-center justify-center rounded-xl transition ${
+                            active
+                              ? "bg-indigo-600 text-white"
+                              : "bg-indigo-100 text-indigo-600 group-hover:bg-indigo-200"
+                          }`}
+                        >
+                          <Icon className="h-5 w-5" />
+                        </span>
                         <div
-                          className={`font-semibold text-base ${
-                            active ? "text-violet-600" : ""
+                          className={`mt-3 text-base font-semibold ${
+                            active ? "text-indigo-700" : "text-gray-900"
                           }`}
                         >
                           {f.key}
                         </div>
-                        <div className="md:text-sm text-xs text-gray-700 mt-2 md:leading-6 leading-5">
+                        <div className="mt-1 text-xs leading-5 text-gray-600 md:text-sm">
                           {f.desc}
                         </div>
                       </button>
@@ -366,16 +471,16 @@ const LessonPlanGenerator = ({ onSubmit }) => {
               </div>
 
               {/* Detail (display-only; not in prompt) */}
-              <div className="mt-6">
+              <div className="mt-7">
                 <span className="block text-sm font-semibold text-gray-800">
                   Level of detail
                 </span>
-                <p className="text-gray-600 leading-6 text-sm mb-2">
+                <p className="mb-2 text-sm leading-6 text-gray-600">
                   {FORMATS_WITH_HIGH_DETAIL.has(format)
                     ? "What level of detail would you like?"
                     : "Only Outline is available for this format."}
                 </p>
-                <div className="flex gap-5">
+                <div className="flex gap-3">
                   {(FORMATS_WITH_HIGH_DETAIL.has(format)
                     ? DETAIL
                     : ["Outline"]
@@ -386,10 +491,10 @@ const LessonPlanGenerator = ({ onSubmit }) => {
                         key={d}
                         type="button"
                         onClick={() => setDetailLevel(d)}
-                        className={`rounded-lg w-full text-base border px-6 py-3 font-medium transition ${
+                        className={`flex-1 rounded-xl border px-6 py-3 text-sm font-semibold transition ${
                           active
-                            ? "border-violet-600 bg-violet-600 text-white"
-                            : "border-violet-300 bg-white text-violet-800 hover:border-violet-400"
+                            ? "border-transparent bg-gradient-to-r from-indigo-600 to-sky-500 text-white shadow-md"
+                            : "border-indigo-200 bg-white/70 text-indigo-700 hover:border-indigo-300 hover:bg-indigo-50"
                         }`}
                         aria-pressed={active}
                       >
@@ -402,34 +507,43 @@ const LessonPlanGenerator = ({ onSubmit }) => {
 
               {/* Errors + Submit */}
               <div className="mt-4">
-                {apiError && <p className="text-sm text-red-600">{apiError}</p>}
+                {apiError && (
+                  <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
+                    {apiError}
+                  </p>
+                )}
               </div>
 
               <div className="mt-8 flex justify-center">
                 <button
                   type="submit"
-                  className={`rounded-lg w-full justify-center flex items-center gap-2 px-10 py-3 font-medium ${
+                  className={`group relative w-full overflow-hidden rounded-xl px-10 py-3.5 font-semibold text-white transition ${
                     isValid
-                      ? "bg-violet-600 text-white hover:bg-violet-700"
-                      : "bg-gray-300 text-gray-600 cursor-not-allowed"
+                      ? "bg-gradient-to-r from-indigo-600 via-blue-600 to-sky-500 shadow-lg shadow-indigo-500/30 hover:shadow-xl hover:shadow-indigo-500/40"
+                      : "cursor-not-allowed bg-gray-300 text-gray-500 shadow-none"
                   } ${loading ? "cursor-wait" : ""}`}
                   disabled={!isValid || loading}
                 >
-                  {loading ? (
-                    <>
-                      <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/90 border-t-transparent" />
-                      Generating...<BsStars size={20} className="ml-1" />
-                    </>
-                  ) : (
-                    <>
-                      Generate <BsStars size={20} className="ml-1" />
-                    </>
+                  {isValid && !loading && (
+                    <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent group-hover:animate-shimmer" />
                   )}
+                  <span className="relative flex items-center justify-center gap-2">
+                    {loading ? (
+                      <>
+                        <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/90 border-t-transparent" />
+                        Generating...
+                        <BsStars size={20} className="ml-1" />
+                      </>
+                    ) : (
+                      <>
+                        Generate <BsStars size={20} className="ml-1" />
+                      </>
+                    )}
+                  </span>
                 </button>
               </div>
             </form>
           </div>
-
         </div>
       </div>
       <AuthModal />

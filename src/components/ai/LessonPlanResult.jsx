@@ -75,7 +75,7 @@ const TypingBanner = ({ show = false }) =>
     <>
       <div className="sticky top-0 left-0 right-0 lg:p-6 p-4 z-20 w-full bg-[#e4d7ff]/80 backdrop-blur">
         <div className="max-w-5xl mx-auto">
-          <div className="flex items-center gap-2 text-violet-700 text-base font-semibold">
+          <div className="flex items-center gap-2 text-indigo-700 text-base font-semibold">
             <span>AI is typing</span>
             <span className="inline-flex items-center gap-1 ml-1">
               <span className="qeeb-dot" />
@@ -437,8 +437,8 @@ const LessonPlanResult = ({ role = "teacher" }) => {
               <div className="text-xl font-semibold flex items-center gap-2">
                 {data && (
                   <Link
-                    href="/ai/lesson-plan-generator"
-                    className="text-violet-600 hover:underline text-sm print:hidden"
+                    href="/ai/generator-lesson-plan"
+                    className="text-indigo-600 hover:underline text-sm print:hidden"
                     aria-label="Back to generator"
                     title="Back"
                   >
@@ -456,7 +456,7 @@ const LessonPlanResult = ({ role = "teacher" }) => {
                 <button
                   type="button"
                   onClick={handlePrint}
-                  className="print:hidden inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs md:text-sm font-medium bg-violet-600 text-white hover:bg-violet-700 border border-violet-700"
+                  className="print:hidden inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs md:text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 border border-indigo-700"
                   title="Print lesson plan"
                 >
                   <LuPrinter size={16} />
@@ -504,8 +504,8 @@ const LessonPlanResult = ({ role = "teacher" }) => {
                   </p>
                   <div className="mt-3">
                     <Link
-                      href="/ai/lesson-plan-generator"
-                      className="inline-flex px-5 py-2.5 rounded-lg bg-violet-600 text-white hover:bg-violet-700"
+                      href="/ai/generator-lesson-plan"
+                      className="inline-flex px-5 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
                     >
                       Open Generator
                     </Link>

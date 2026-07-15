@@ -8,12 +8,11 @@ import { BsStars } from "react-icons/bs";
 import { UserContext } from "@/src/utils/userContext";
 import { loginUser } from "@/src/utils/getUserLogin";
 import { registerUser } from "@/src/utils/userRegistration";
-import { googleLogin, decodeJwt } from "@/src/utils/auth/googleAuth";
 import { buildUserPayload } from "@/src/utils/auth/userPayload";
+import { isValidEmail } from "@/src/utils/auth/validators";
 import AuthShowcase from "./AuthShowcase";
 import LoginForm from "./LoginForm";
 import RegisterForm from "./RegisterForm";
-import GoogleAuthButton from "./GoogleAuthButton";
 
 const HOME_ROUTE = "/dashboard";
 
@@ -23,7 +22,6 @@ export default function AuthPage({ initialMode = "login" }) {
 
   const [mode, setMode] = useState(initialMode === "register" ? "register" : "login");
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
 
   const isRegister = mode === "register";
 
@@ -41,12 +39,18 @@ export default function AuthPage({ initialMode = "login" }) {
   const handleLogin = async (fields) => {
     setLoading(true);
     try {
+      const identifier = fields.identifier.trim();
       const response = await loginUser({
-        userName: fields.identifier,
+        emailOrPhone: identifier,
         password: fields.password,
       });
-      setUser(buildUserPayload(response, { email: fields.identifier }));
-      toast.success("Signed in successfully. Redirecting...");
+      setUser(
+        buildUserPayload(
+          response,
+          isValidEmail(identifier) ? { email: identifier } : { phone: identifier }
+        )
+      );
+      toast.success(response?.message || "Signed in successfully. Redirecting...");
       goHome();
     } catch (error) {
       toast.error(error?.message || "Unable to sign in. Please check your credentials.");
@@ -59,60 +63,24 @@ export default function AuthPage({ initialMode = "login" }) {
     setLoading(true);
     try {
       const response = await registerUser({
-        name: fields.userName,
         email: fields.email,
-        mobileNumber: fields.phone,
-        organizationName: fields.organization,
+        userName: fields.userName,
+        phoneNumber: fields.phone,
+        schoolOrganization: fields.organization,
         password: fields.password,
       });
-      setUser(
-        buildUserPayload(response, {
-          name: fields.userName,
-          email: fields.email,
-          phone: fields.phone,
-          organization: fields.organization,
-        })
+      // Registration returns no session, and the account stays inactive until an
+      // administrator activates it — so send the user to the sign-in form instead
+      // of into the app.
+      toast.success(
+        response?.message ||
+          "Account created. You can sign in once an administrator activates it."
       );
-      toast.success("Account created! Redirecting...");
-      goHome();
+      switchMode("login");
     } catch (error) {
       toast.error(error?.message || "Registration failed. Please try again.");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleGoogleCredential = async (credential) => {
-    if (!credential) {
-      toast.error(
-        "Google Sign-In isn't configured yet. Add NEXT_PUBLIC_GOOGLE_CLIENT_ID to enable it."
-      );
-      return;
-    }
-
-    setGoogleLoading(true);
-    try {
-      const profile = decodeJwt(credential);
-      let payload;
-      try {
-        const response = await googleLogin(credential);
-        payload = buildUserPayload(response, profile || {});
-      } catch {
-        // Backend endpoint not wired yet — fall back to the verified Google profile
-        // so the flow works end to end during development.
-        payload = buildUserPayload(null, {
-          name: profile?.name,
-          email: profile?.email,
-          picture: profile?.picture,
-        });
-      }
-      setUser(payload);
-      toast.success(`Welcome${payload.name ? `, ${payload.name}` : ""}! Redirecting...`);
-      goHome();
-    } catch {
-      toast.error("Google sign-in failed. Please try again.");
-    } finally {
-      setGoogleLoading(false);
     }
   };
 
@@ -177,17 +145,6 @@ export default function AuthPage({ initialMode = "login" }) {
           ) : (
             <LoginForm onSubmit={handleLogin} loading={loading} />
           )}
-
-          {/* Divider */}
-          <div className="my-5 flex items-center gap-3">
-            <span className="h-px flex-1 bg-slate-200" />
-            <span className="text-xs font-medium uppercase tracking-wide text-slate-400">
-              or continue with
-            </span>
-            <span className="h-px flex-1 bg-slate-200" />
-          </div>
-
-          <GoogleAuthButton onCredential={handleGoogleCredential} loading={googleLoading} />
 
           <p className="mt-6 text-center text-sm text-slate-500">
             {isRegister ? "Already have an account? " : "Don't have an account? "}

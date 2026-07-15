@@ -4,7 +4,7 @@ import { useContext } from "react";
 import Link from "next/link";
 import { UserContext } from "@/src/utils/userContext";
 
-const TOOLS = ["Lesson Plan Generator", "Test Generator"];
+const TOOLS = ["Generator Lesson Plan", "Generator AI Exam"];
 
 /**
  * Footer "Tools" links. They point to the gated dashboard only when the user

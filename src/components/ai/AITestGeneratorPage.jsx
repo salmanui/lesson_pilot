@@ -790,7 +790,7 @@ const buildFallbackPaperHtml = (meta, questions, withAnswers) => {
 };
 
 const inputClass =
-  "h-10 w-full rounded-lg border border-[#D1DFFC] bg-white px-3 text-sm font-medium text-[#193B68] outline-none placeholder:text-[#8FA4C3] focus:border-blue-500 focus:ring-1 focus:ring-blue-500";
+  "h-10 w-full rounded-lg border border-[#D1DFFC] bg-white px-3 text-sm font-medium text-[#193B68] outline-none placeholder:text-[#8FA4C3] focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500";
 const labelClass = "mb-2 block text-sm font-medium text-[#193B68]";
 
 const AITestGeneratorPage = () => {
@@ -1308,7 +1308,7 @@ No markdown. No extra text.
 
   return (
     <>
-      <div className="min-h-screen bg-[#D8DFEA] p-4 pb-10 md:p-6">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-sky-100 p-4 pb-10 md:p-6">
         <div className="mx-auto max-w-[1240px] space-y-6">
           <header className="flex flex-wrap items-center justify-end gap-3">
             <Link
@@ -1320,14 +1320,19 @@ No markdown. No extra text.
             </Link>
           </header>
 
-          <div>
-            <h1 className="text-3xl font-semibold text-[#193B68]">
-              AI Test Generator
-            </h1>
-            <p className="text-sm text-[#597295]">
-              Create AI tests, print answer keys, and download student question
-              paper for exam.
-            </p>
+          <div className="flex items-start gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 via-blue-600 to-sky-500 text-white shadow-lg shadow-indigo-500/25">
+              <BsStars className="h-5 w-5" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold text-[#193B68]">
+                AI Test Generator
+              </h1>
+              <p className="text-sm text-[#597295]">
+                Create AI tests, print answer keys, and download student
+                question paper for exam.
+              </p>
+            </div>
           </div>
 
           <div className="rounded-xl bg-white p-5 md:rounded-[24px] md:p-8">
@@ -1484,7 +1489,7 @@ No markdown. No extra text.
                           onClick={() => toggleQType(type.key)}
                           className={`inline-flex items-center justify-center rounded-lg border px-5 py-3 text-sm font-medium leading-none ${
                             active
-                              ? "border-[#4B85FF] bg-[#EAF2FF] text-[#2C5DAE]"
+                              ? "border-indigo-400 bg-indigo-50 text-indigo-700"
                               : "border-[#C8D9F8] bg-white text-[#3C5F8F] hover:bg-[#F5F8FF]"
                           }`}
                         >
@@ -1503,7 +1508,7 @@ No markdown. No extra text.
                   <button
                     type="button"
                     onClick={handlePreviousStep}
-                    className="inline-flex h-10 items-center justify-center rounded-full border border-[#2F6DE8] bg-white px-8 text-base font-medium text-[#2F6DE8] hover:bg-[#EEF4FF]"
+                    className="inline-flex h-10 items-center justify-center rounded-full border border-indigo-500 bg-white px-8 text-base font-medium text-indigo-600 hover:bg-indigo-50"
                   >
                     Previous
                   </button>
@@ -1512,7 +1517,7 @@ No markdown. No extra text.
                   <button
                     type="button"
                     onClick={handleNextStep}
-                    className="inline-flex h-10 items-center justify-center rounded-full bg-[#4282FF] px-8 text-base font-medium text-white hover:bg-[#2F6DE8]"
+                    className="inline-flex h-10 items-center justify-center rounded-full bg-gradient-to-r from-indigo-600 via-blue-600 to-sky-500 px-8 text-base font-medium text-white shadow-lg shadow-indigo-500/30 transition hover:shadow-xl hover:shadow-indigo-500/40"
                   >
                     Next
                   </button>
@@ -1521,7 +1526,7 @@ No markdown. No extra text.
                     type="button"
                     onClick={handleGenerate}
                     disabled={isGenerating || isPdfLoading}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-[#4282FF] px-8 text-base font-medium text-white hover:bg-[#2F6DE8] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 via-blue-600 to-sky-500 px-8 text-base font-medium text-white shadow-lg shadow-indigo-500/30 transition hover:shadow-xl hover:shadow-indigo-500/40 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {isGenerating ? (
                       <>
@@ -1550,7 +1555,7 @@ No markdown. No extra text.
                     type="button"
                     onClick={handlePrintWithAnswers}
                     disabled={isPdfLoading}
-                    className="inline-flex h-10 items-center gap-2 rounded-full border border-[#2F6DE8] bg-white px-5 text-sm font-semibold text-[#2F6DE8] hover:bg-[#EEF4FF] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex h-10 items-center gap-2 rounded-full border border-indigo-500 bg-white px-5 text-sm font-semibold text-indigo-600 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <LuPrinter size={16} />
                     Download Answer Key
@@ -1559,7 +1564,7 @@ No markdown. No extra text.
                     type="button"
                     onClick={handleDownloadPdf}
                     disabled={isPdfLoading}
-                    className="inline-flex h-10 items-center gap-2 rounded-full bg-[#2F6DE8] px-5 text-sm font-semibold text-white hover:bg-[#2458ba] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex h-10 items-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 via-blue-600 to-sky-500 px-5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/30 transition hover:shadow-xl hover:shadow-indigo-500/40 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <LuDownload size={16} />
                     {isPdfLoading
@@ -1673,7 +1678,7 @@ No markdown. No extra text.
                               checked={isSelected}
                               disabled={disableSelection}
                               onChange={() => toggleSelectQuestion(questionId)}
-                              className="h-5 w-5 rounded border border-[#BBD0F8] accent-[#2F6DE8]"
+                              className="h-5 w-5 rounded border border-[#BBD0F8] accent-indigo-600"
                             />
                             <div className="text-sm font-medium text-[#8A9CB5]">
                               Question {idx + 1}

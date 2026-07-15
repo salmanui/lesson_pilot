@@ -153,7 +153,7 @@ const ExportMenu = ({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs md:text-sm font-medium text-violet-600 border border-violet-900"
+        className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs md:text-sm font-medium text-indigo-600 border border-indigo-300"
         title="Export"
       >
         Export

@@ -19,7 +19,7 @@ const tools = [
     title: "Generator Lesson Plan",
     description:
       "Create structured teacher lesson plans with objectives, activities, assessment ideas, and classroom flow.",
-    href: "/ai/lesson-plan-generator",
+    href: "/ai/generator-lesson-plan",
     icon: LuClipboardList,
     accent: "from-indigo-600 to-sky-500",
     glow: "shadow-indigo-500/25",
@@ -29,7 +29,7 @@ const tools = [
     title: "Generator AI Exam",
     description:
       "Build printable tests with MCQs, true/false, descriptive questions, answer keys, and marks.",
-    href: "/ai-test-generator",
+    href: "/ai/generator-ai-test",
     icon: LuFileQuestion,
     accent: "from-sky-500 to-cyan-500",
     glow: "shadow-sky-500/25",

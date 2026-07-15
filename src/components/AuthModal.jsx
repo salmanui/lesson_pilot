@@ -4,31 +4,14 @@ import React, { useContext, useMemo, useState } from "react";
 import { UserContext } from "../utils/userContext";
 import { loginUser } from "../utils/getUserLogin";
 import { registerUser } from "../utils/userRegistration";
-import { updateUserPassword } from "../utils/updateUserPassword";
+import { buildUserPayload } from "../utils/auth/userPayload";
 
 const initialFields = {
   name: "",
   email: "",
   mobileNumber: "",
+  organization: "",
   password: "",
-  oldPassword: "",
-  newPassword: "",
-};
-
-const getUserPayload = (response, fallback = {}) => {
-  const source = response?.data || response?.result || response?.user || response || {};
-  return {
-    ...source,
-    name: source.name || source.fullName || fallback.name || "",
-    email: source.email || fallback.email || "",
-    mobileNumber:
-      source.mobileNumber ||
-      source.mobileNo ||
-      source.phoneNumber ||
-      fallback.mobileNumber ||
-      "",
-    userId: source.userId || source.id || source.UserId || source.ID || fallback.email || "",
-  };
 };
 
 export default function AuthModal() {
@@ -42,11 +25,11 @@ export default function AuthModal() {
   const [mode, setMode] = useState(authMode === "signup" ? "signup" : "login");
   const [fields, setFields] = useState(initialFields);
   const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState("error");
   const [loading, setLoading] = useState(false);
 
   const title = useMemo(() => {
     if (mode === "signup") return "Create account";
-    if (mode === "reset") return "Update password";
     return "Sign in";
   }, [mode]);
 
@@ -72,36 +55,39 @@ export default function AuthModal() {
     event.preventDefault();
     setLoading(true);
     setMessage("");
+    setMessageTone("error");
 
     try {
       if (mode === "signup") {
         const response = await registerUser({
-          name: fields.name,
           email: fields.email,
-          mobileNumber: fields.mobileNumber,
+          userName: fields.name,
+          phoneNumber: fields.mobileNumber,
+          schoolOrganization: fields.organization,
           password: fields.password,
         });
-        setUser(getUserPayload(response, fields));
-        handleClose();
-        return;
-      }
-
-      if (mode === "reset") {
-        await updateUserPassword(
-          fields.email || fields.mobileNumber,
-          fields.oldPassword,
-          fields.newPassword,
+        // No session comes back — the account is inactive until an administrator
+        // activates it, so drop the user on the sign-in form with the API's message.
+        // setMode (not switchMode) keeps that message visible across the switch.
+        setMessage(
+          response?.message ||
+            "Account created. You can sign in once an administrator activates it."
         );
-        setMessage("Password updated. You can sign in now.");
+        setMessageTone("info");
         setMode("login");
         return;
       }
 
       const response = await loginUser({
-        userName: fields.email || fields.mobileNumber,
+        emailOrPhone: fields.email || fields.mobileNumber,
         password: fields.password,
       });
-      setUser(getUserPayload(response, fields));
+      setUser(
+        buildUserPayload(response, {
+          email: fields.email,
+          phone: fields.mobileNumber,
+        })
+      );
       handleClose();
     } catch (error) {
       setMessage(error?.message || "Something went wrong. Please try again.");
@@ -147,46 +133,37 @@ export default function AuthModal() {
           />
 
           {mode === "signup" && (
-            <input
-              name="mobileNumber"
-              value={fields.mobileNumber}
-              onChange={updateField}
-              placeholder="Mobile number"
-              className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none focus:border-sky-500"
-            />
-          )}
-
-          {mode === "reset" ? (
             <>
               <input
-                name="oldPassword"
-                type="password"
-                value={fields.oldPassword}
+                name="mobileNumber"
+                value={fields.mobileNumber}
                 onChange={updateField}
-                placeholder="Current password"
+                placeholder="Mobile number"
                 className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none focus:border-sky-500"
                 required
               />
               <input
-                name="newPassword"
-                type="password"
-                value={fields.newPassword}
+                name="organization"
+                value={fields.organization}
                 onChange={updateField}
-                placeholder="New password"
+                placeholder="School / organization"
                 className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none focus:border-sky-500"
                 required
               />
             </>
-          ) : (
-            <input
-              name="password"
-              type="password"
-              value={fields.password}
-              onChange={updateField}
-              placeholder="Password"
-              className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none focus:border-sky-500"
-              required
-            />
+          )}
+
+          <input
+            name="password"
+            type="password"
+            value={fields.password}
+            onChange={updateField}
+            placeholder="Password"
+            className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm outline-none focus:border-sky-500"
+            required
+          />
+          {mode === "signup" && (
+            <p className="text-xs text-slate-500">Use at least 8 characters.</p>
           )}
 
           {message && <p className="text-sm text-red-600">{message}</p>}
@@ -217,15 +194,6 @@ export default function AuthModal() {
               className="font-semibold text-sky-700"
             >
               Create account
-            </button>
-          )}
-          {mode !== "reset" && (
-            <button
-              type="button"
-              onClick={() => switchMode("reset")}
-              className="font-semibold text-sky-700"
-            >
-              Update password
             </button>
           )}
         </div>

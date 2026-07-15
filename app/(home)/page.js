@@ -11,7 +11,7 @@ import { homeJsonLd } from "@/lib/jsonld";
 
 export const metadata = {
   title: {
-    absolute: "LessonPilot — AI Lesson Plans & Test Generator",
+    absolute: "AI Generated Lesson Plans & AI Generator Tests — LessonPilot",
   },
   description:
     "Turn any topic into classroom-ready lesson plans and printable tests in minutes. Free to start, no credit card required.",

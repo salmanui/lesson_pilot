@@ -1,21 +1,22 @@
-import axios from "axios";
-// Get base URL from .env file
-const baseUrl = process.env.NEXT_PUBLIC_API_URL;
-// Utility function to handle the API POST request for user registration
-export const registerUser = async (formData) => {
-  const url = `${baseUrl}/api/Registration/QeebSignup`;
-  try {
-    const response = await axios.post(url, formData, {
-      headers: {
-        "Content-Type": "application/json",
-        accept: "*/*",
-      },
-    });
-    return response.data; // Assuming successful response returns the response data
-  } catch (error) {
-    console.error("Error registering user:", error);
-    throw new Error("User registration failed");
-  }
-};
+import { postAuth } from "./auth/authClient";
 
-
+/**
+ * POST /api/auth/register
+ * Body: { email, userName, phoneNumber, schoolOrganization, password }
+ *
+ * Returns `{ success, message }` only — no user object and no token. New accounts
+ * are inactive until an administrator activates them, so a successful call is NOT
+ * a sign-in: callers must send the user to the login screen rather than straight in.
+ */
+export const registerUser = async ({
+  email,
+  userName,
+  phoneNumber,
+  schoolOrganization,
+  password,
+}) =>
+  postAuth(
+    "/api/auth/register",
+    { email, userName, phoneNumber, schoolOrganization, password },
+    "User registration failed"
+  );
