@@ -73,7 +73,7 @@ export default function SubscriptionModal() {
   const toolLabel = TOOL_LABELS[subscriptionModalSourceTool] || "this tool";
 
   const note = status.isTrialing
-    ? `You have ${status.trialDaysRemaining} ${
+    ? `${status.trialDaysRemaining} ${
         status.trialDaysRemaining === 1 ? "day" : "days"
       } left in your free trial. Upgrade any time to keep your access.`
     : subscriptionModalReason === "download_locked"
