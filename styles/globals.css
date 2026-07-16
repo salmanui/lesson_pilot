@@ -36,3 +36,270 @@ select:autofill {
   -webkit-text-fill-color: #0f172a;
   filter: none;
 }
+
+/* ---------------------------------------------------------------------------
+   AI lesson-plan markdown
+   Tailwind's preflight strips heading/list styling, so the markdown the AI
+   returns needs its own type scale here.
+   --------------------------------------------------------------------------- */
+.mark-down {
+  color: #1e293b;
+  font-size: 0.9rem;
+  line-height: 1.7;
+  /* Long unbroken strings (URLs, formulae) must not widen the card on a phone. */
+  overflow-wrap: break-word;
+}
+
+@media (min-width: 640px) {
+  .mark-down {
+    font-size: 0.975rem;
+    line-height: 1.75;
+  }
+}
+
+.mark-down > *:first-child {
+  margin-top: 0;
+}
+
+.mark-down > *:last-child {
+  margin-bottom: 0;
+}
+
+.mark-down h1,
+.mark-down h2 {
+  margin: 1.5rem 0 0.625rem;
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+}
+
+.mark-down h3 {
+  margin: 1.25rem 0 0.5rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #312e81;
+}
+
+@media (min-width: 640px) {
+  .mark-down h1,
+  .mark-down h2 {
+    margin: 1.75rem 0 0.75rem;
+    font-size: 1.375rem;
+  }
+
+  .mark-down h3 {
+    margin: 1.5rem 0 0.625rem;
+    font-size: 1.125rem;
+  }
+}
+
+.mark-down h4 {
+  margin: 1.25rem 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #4338ca;
+}
+
+.mark-down p {
+  margin: 0 0 0.875rem;
+}
+
+.mark-down strong {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.mark-down em {
+  font-style: italic;
+}
+
+.mark-down a {
+  color: #4f46e5;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.mark-down ul,
+.mark-down ol {
+  margin: 0 0 1rem;
+  padding-left: 1.5rem;
+}
+
+.mark-down ul {
+  list-style: disc;
+}
+
+.mark-down ol {
+  list-style: decimal;
+}
+
+.mark-down li {
+  margin: 0.3rem 0;
+  padding-left: 0.2rem;
+}
+
+.mark-down li::marker {
+  color: #6366f1;
+  font-weight: 600;
+}
+
+.mark-down ul ul,
+.mark-down ol ol,
+.mark-down ul ol,
+.mark-down ol ul {
+  margin: 0.3rem 0 0.3rem;
+}
+
+.mark-down blockquote {
+  margin: 1rem 0;
+  border-left: 4px solid #a5b4fc;
+  background: #eef2ff;
+  border-radius: 0 0.5rem 0.5rem 0;
+  padding: 0.75rem 1rem;
+  color: #3730a3;
+}
+
+.mark-down blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+.mark-down code {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.375rem;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.875em;
+  color: #be123c;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.mark-down pre {
+  margin: 1rem 0;
+  overflow-x: auto;
+  border-radius: 0.75rem;
+  background: #0f172a;
+  padding: 1rem;
+}
+
+.mark-down pre code {
+  background: transparent;
+  border: 0;
+  color: #e2e8f0;
+  padding: 0;
+}
+
+.mark-down hr {
+  display: none;
+}
+
+.markdown-fade-in {
+  animation: fade-in 0.4s ease-out both;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Print
+   The result page renders inside a fixed-height scroll container, which makes
+   the browser print only the visible viewport. Unwinding those constraints at
+   print time is what lets the whole plan paginate.
+   --------------------------------------------------------------------------- */
+@media print {
+  html,
+  body {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  #lp-scroll,
+  #lp-page {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  #lp-print-area {
+    border: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Flatten the plan's flex row: a flex container paginates its items poorly,
+     and on paper the plan is the only child left standing anyway. */
+  .lp-plan-layout {
+    display: block !important;
+  }
+
+  .lp-no-print {
+    display: none !important;
+  }
+
+  /* A section collapsed on screen must still print in full. */
+  .lp-body {
+    display: block !important;
+  }
+
+  /* A long section must be allowed to flow across sheets. Pinning the whole
+     card with break-inside:avoid bumps any section taller than the space left
+     on the sheet onto a fresh page, leaving a large blank gap behind it — the
+     same trap lessonPlanExportHtml.js documents for the PDF path. Only the
+     header is pinned to the content beneath it.
+
+     overflow must be reset too: the card carries `overflow-hidden` to clip its
+     header to the rounded corners, and any overflow other than visible makes an
+     element monolithic — unbreakable across sheets — which reintroduces exactly
+     the gap break-inside:auto is here to remove. */
+  .lp-section {
+    break-inside: auto;
+    page-break-inside: auto;
+    overflow: visible !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: none !important;
+  }
+
+  /* Never leave a section heading stranded at the foot of a sheet. */
+  .lp-section > header {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    break-after: avoid-page;
+    page-break-after: avoid;
+  }
+
+  .mark-down h1,
+  .mark-down h2,
+  .mark-down h3,
+  .mark-down h4 {
+    break-after: avoid-page;
+    page-break-after: avoid;
+  }
+
+  .mark-down table,
+  .mark-down img,
+  .mark-down blockquote,
+  .mark-down li {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Keep the accent colours the design relies on. */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  @page {
+    margin: 14mm 12mm;
+  }
+}

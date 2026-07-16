@@ -1,124 +1,94 @@
-﻿import React, { useState } from "react";
+"use client";
+
+import React, { useEffect, useRef, useState } from "react";
 import { IoChevronDown } from "react-icons/io5";
-import html2pdf from "html2pdf.js";
+import { LuFileText, LuFileDown, LuLoaderCircle } from "react-icons/lu";
 import { saveAs } from "file-saver";
+import { buildLessonPlanExportHtml } from "@/src/utils/ai/lessonPlanExportHtml";
+import { buildLessonPlanDocxBlob } from "@/src/utils/ai/lessonPlanDocx";
 
-/* ---- PDF helpers ---- */
-function cloneForPdf(el) {
-  const clone = el.cloneNode(true);
+/** A4 width at 96dpi minus the page margins, so the capture matches the sheet. */
+const PDF_RENDER_WIDTH = 760;
 
-  // kill animations + fades
-  clone.querySelectorAll("*").forEach(n => {
-    n.style.animation = "none";
-    n.style.transition = "none";
-    n.style.opacity = "1";
-    n.style.color = "#111111";
-    n.style.textShadow = "none";
-  });
-
-  // remove the outer card border/shadow ONLY
-  const root = clone.querySelector("[data-export-root]");
-  if (root) {
-    root.style.border = "none";
-    root.style.boxShadow = "none";
-    root.style.borderRadius = "0";
-    root.style.padding = "24px"; // keep spacing after removing card styles
-    root.style.background = "#ffffff";
-  }
-
-  // images
-  clone.querySelectorAll("img").forEach(img => {
-    try { if (img.getAttribute("src")) { img.src = new URL(img.getAttribute("src"), window.location.href).href; } } catch {}
-    img.removeAttribute("loading"); img.removeAttribute("decoding");
-    img.style.maxWidth = "100%"; img.style.height = "auto";
-  });
-
-  // print css (keeps table borders)
-  const style = document.createElement("style");
-  style.textContent = `
-    *{font-family: Arial, Helvetica, sans-serif !important;}
-    body{background:#fff !important;color:#111 !important;}
-    /* nuke any residual shadows globally */
-    [class*="shadow"]{box-shadow:none !important;}
-    h1,h2,h3{margin:0 0 8px 0;} p{margin:0 0 8px 0;}
-    ul,ol{margin:0 0 8px 20px;}
-    table{border-collapse:collapse;width:100%;margin:8px 0;}
-    th,td{border:1px solid #d1d5db;padding:6px 8px;font-size:12pt;}
-    thead th{background:#f8fafc;}
-    .page-break{page-break-before:always;}
-    .print\\:hidden{display:none !important;}
-    :where(*):not(table):not(th):not(td){ border:none !important; }
-    border, [class*="border-"]{ border-width:0 !important; }
-    [class*="rounded"]{ border-radius:0 !important; }
-  `;
-  const wrap = document.createElement("div");
-  wrap.appendChild(style);
-  wrap.appendChild(clone);
-  return wrap;
+/**
+ * Flattens the export document into a `<style>` + markup fragment.
+ *
+ * html2pdf is handed this as a string rather than a detached node: it then
+ * builds and positions its own capture container. Mounting our own offscreen
+ * node instead renders a blank page, because html2canvas captures a viewport
+ * of `windowWidth` from the origin and never sees a node parked off-screen.
+ */
+function toRenderableFragment(html) {
+  const parsed = new DOMParser().parseFromString(html, "text/html");
+  const css = Array.from(parsed.querySelectorAll("style"))
+    .map((node) => node.textContent)
+    .join("\n");
+  return `<style>${css}</style><div style="width:${PDF_RENDER_WIDTH}px;background:#ffffff;">${parsed.body.innerHTML}</div>`;
 }
 
+async function exportPDF({ root, title, meta, filename }) {
+  const html = buildLessonPlanExportHtml({ root, title, meta });
+  const { default: html2pdf } = await import("html2pdf.js");
 
-function exportPDF(targetRef, filename) {
-  const el = targetRef?.current;
-  if (!el) return;
-  const clean = cloneForPdf(el);
-  const scale = Math.min(4, (window.devicePixelRatio || 1) * 2);
-
-  const opt = {
-    margin: [10, 12, 10, 12],
-    filename: `${filename}.pdf`,
-    image: { type: "jpeg", quality: 0.98 },
-    html2canvas: {
-      scale,
-      useCORS: true,
-      backgroundColor: "#ffffff",
-      letterRendering: true,
-      logging: false,
-      windowWidth: document.documentElement.scrollWidth,
-      windowHeight: document.documentElement.scrollHeight,
-    },
-    jsPDF: { unit: "pt", format: "a4", orientation: "portrait" },
-    pagebreak: { mode: ["css", "legacy"] },
-  };
-
-  html2pdf().set(opt).from(clean).save();
+  return html2pdf()
+    .set({
+      margin: [12, 12, 14, 12],
+      filename: `${filename}.pdf`,
+      image: { type: "jpeg", quality: 0.98 },
+      html2canvas: {
+        scale: Math.min(3, (window.devicePixelRatio || 1) * 2),
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        letterRendering: true,
+        logging: false,
+      },
+      jsPDF: { unit: "pt", format: "a4", orientation: "portrait" },
+      // "avoid-all" would pin every element, bumping any section too tall for
+      // the remaining space onto a fresh sheet and leaving a blank gap. Only
+      // rows and list items are worth keeping whole.
+      pagebreak: { mode: ["css", "legacy"], avoid: ["tr", "li"] },
+    })
+    .from(toRenderableFragment(html), "string")
+    .save();
 }
 
-/* ---- DOCX helper ---- */
-function buildExportHtml(el) {
-  const css = `
-    <style>
-      *{font-family: Arial, Helvetica, sans-serif;}
-      body{margin:16px;}
-      h1,h2,h3{margin:0 0 8px 0;}
-      p{margin:0 0 8px 0;}
-      ul,ol{margin:0 0 8px 20px;}
-      table{border-collapse:collapse;width:100%;margin:8px 0;}
-      th,td{border:1px solid #d1d5db;padding:6px 8px;font-size:12pt;}
-      thead th{background:#f8fafc;}
-      img{max-width:100%;height:auto;}
-    </style>`;
-  const clone = el.cloneNode(true);
-  clone.querySelectorAll("*").forEach((n) => n.removeAttribute("class"));
-  clone.querySelectorAll("img").forEach((img) => {
-    try {
-      if (img.src)
-        img.src = new URL(img.getAttribute("src"), window.location.href).href;
-    } catch {}
-    img.removeAttribute("loading");
-    img.removeAttribute("decoding");
-  });
-  return `<!DOCTYPE html><html><head><meta charset="utf-8" />${css}</head><body>${clone.innerHTML}</body></html>`;
+async function exportDOCX({ title, meta, sections, filename }) {
+  // Loaded on demand: the writer is only needed once someone exports.
+  const docx = await import("docx");
+  const blob = await buildLessonPlanDocxBlob({ title, meta, sections, docx });
+  saveAs(blob, `${filename}.docx`);
 }
 
 const ExportMenu = ({
   targetRef,
   filename = "lesson-plan",
+  title,
+  meta,
+  sections,
   canDownload = true,
   onRequirePremium,
   onRequestAccess,
+  onError,
 }) => {
   const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(null);
+  const wrapRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDocClick = (event) => {
+      if (!wrapRef.current?.contains(event.target)) setOpen(false);
+    };
+    const onKey = (event) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
 
   const requireDownloadAccess = () => {
     if (typeof onRequestAccess === "function") {
@@ -132,55 +102,97 @@ const ExportMenu = ({
     return false;
   };
 
-  const exportDOCX = () => {
-    if (!requireDownloadAccess()) return;
-    const el = targetRef?.current;
-    if (!el) return;
-    const html = buildExportHtml(el);
-    const blob = new Blob([html], { type: "application/msword;charset=utf-8" });
-    saveAs(blob, `${filename}.doc`);
-    setOpen(false);
-  };
+  const safeName = (filename || "lesson-plan")
+    .replace(/[\\/:*?"<>|]+/g, "-")
+    .slice(0, 80)
+    .trim();
 
-  const exportPDFHandler = () => {
+  const run = async (kind) => {
+    if (busy) return;
     if (!requireDownloadAccess()) return;
-    exportPDF(targetRef, filename);
-    setOpen(false);
+
+    // The PDF is captured from the rendered card; the .docx is written from the
+    // parsed markdown and needs no DOM.
+    const root = targetRef?.current;
+    if (kind === "pdf" && !root) return;
+    if (kind === "docx" && !sections?.length) return;
+
+    const payload = {
+      root,
+      title: title || safeName,
+      meta: meta || {},
+      sections: sections || [],
+      filename: safeName,
+    };
+
+    setBusy(kind);
+    try {
+      if (kind === "pdf") await exportPDF(payload);
+      else await exportDOCX(payload);
+      setOpen(false);
+    } catch (error) {
+      onError?.(error);
+    } finally {
+      setBusy(null);
+    }
   };
 
   return (
-    <div className="relative">
+    <div className="relative" ref={wrapRef}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs md:text-sm font-medium text-indigo-600 border border-indigo-300"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        disabled={Boolean(busy)}
+        className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs font-semibold text-indigo-600 shadow-sm transition hover:border-indigo-300 hover:bg-indigo-50 disabled:opacity-60 sm:w-auto sm:py-1.5 md:text-sm"
         title="Export"
       >
-        Export
-        <IoChevronDown size={16} />
+        {busy ? (
+          <LuLoaderCircle size={15} className="animate-spin" />
+        ) : (
+          <LuFileDown size={15} />
+        )}
+        {busy ? "Preparing…" : "Export"}
+        <IoChevronDown
+          size={15}
+          className={`transition-transform ${open ? "rotate-180" : ""}`}
+        />
       </button>
 
       {open && (
         <div
-          className="absolute right-0 mt-2 w-44 rounded-lg border border-slate-200 bg-white shadow-lg z-10"
-          onMouseLeave={() => setOpen(false)}
+          role="menu"
+          className="absolute right-0 z-20 mt-2 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10"
         >
           <button
-            className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50"
-            onClick={exportDOCX}
+            role="menuitem"
+            className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm text-slate-700 transition hover:bg-indigo-50 disabled:opacity-60"
+            onClick={() => run("docx")}
+            disabled={Boolean(busy)}
           >
-            Microsoft Word (.doc)
+            <LuFileText size={16} className="text-sky-600" />
+            <span>
+              Microsoft Word
+              <span className="block text-xs text-slate-400">.docx</span>
+            </span>
           </button>
           <button
-            className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50"
-            onClick={exportPDFHandler}
+            role="menuitem"
+            className="flex w-full items-center gap-2.5 border-t border-slate-100 px-3 py-2.5 text-left text-sm text-slate-700 transition hover:bg-indigo-50 disabled:opacity-60"
+            onClick={() => run("pdf")}
+            disabled={Boolean(busy)}
           >
-            PDF Document (.pdf)
+            <LuFileDown size={16} className="text-rose-600" />
+            <span>
+              PDF Document
+              <span className="block text-xs text-slate-400">.pdf</span>
+            </span>
           </button>
         </div>
       )}
     </div>
   );
 };
-export default ExportMenu;
 
+export default ExportMenu;

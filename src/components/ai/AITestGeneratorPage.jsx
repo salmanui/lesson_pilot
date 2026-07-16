@@ -4,38 +4,79 @@ import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { BsStars } from "react-icons/bs";
 import { LuDownload, LuPrinter } from "react-icons/lu";
-import { IoArrowBack } from "react-icons/io5";
 import { FiRefreshCcw } from "react-icons/fi";
+import {
+  HiCheck,
+  HiOutlineCheckCircle,
+  HiOutlineClipboardDocumentList,
+  HiOutlineListBullet,
+  HiOutlinePencilSquare,
+  HiOutlineSparkles,
+} from "react-icons/hi2";
 import { toast } from "react-toastify";
 import { fetchLessonPlan } from "@/src/utils/ai/lessonPlanApi";
+import { BOARD_OPTIONS } from "@/src/utils/ai/boards";
 import { UserContext } from "@/src/utils/userContext";
+import DashboardNavbar from "@/src/components/dashboard/DashboardNavbar";
+import SelectDropdown from "@/src/components/ui/SelectDropdown";
 import AuthModal from "../AuthModal";
 import {
   GUEST_AI_TOOL_KEYS,
   canUseAiToolAsGuest,
   consumeAiToolGuestUse,
 } from "@/src/utils/guestAiUsage";
-import {
-  consumeGenerationForUser,
-  getUserSubscriptionStatus,
-} from "@/src/utils/subscriptionApi";
+import { getUserSubscriptionStatus } from "@/src/utils/subscriptionApi";
 
+// `short` is the label used where space is tight (the results rail and legend);
+// `dot` keys the type to its colour in the question map.
 const QUESTION_TYPES = [
-  { key: "MCQ", label: "MCQ" },
-  { key: "TF", label: "T/F" },
-  { key: "DESC", label: "Descriptive" },
+  {
+    key: "MCQ",
+    label: "MCQ",
+    short: "MCQ",
+    dot: "#FF3B30",
+    desc: "Four options, one correct answer",
+    icon: HiOutlineListBullet,
+  },
+  {
+    key: "TF",
+    label: "True / False",
+    short: "T/F",
+    dot: "#A95CFF",
+    desc: "A statement to judge as true or false",
+    icon: HiOutlineCheckCircle,
+  },
+  {
+    key: "DESC",
+    label: "Descriptive",
+    short: "Descriptive",
+    dot: "#24C27A",
+    desc: "Written long-form answers",
+    icon: HiOutlinePencilSquare,
+  },
 ];
 const LANGUAGES = ["English", "Hindi", "Telugu"];
-const BOARD_OPTIONS = ["SSC", "CBSE", "ICSE"];
-const CLASS_OPTIONS = Array.from({ length: 12 }, (_, i) => String(i + 1));
+const CLASS_OPTIONS = Array.from({ length: 10 }, (_, i) => ({
+  value: String(i + 1),
+  label: `Class ${i + 1}`,
+}));
+const LANGUAGE_OPTIONS = LANGUAGES.map((language) => ({
+  value: language,
+  label: language,
+}));
 const BLOOMS = [
-  "Remember",
-  "Understand",
-  "Apply",
-  "Analyze",
-  "Evaluate",
-  "Create",
+  { value: "Remember", description: "Recall facts and basic concepts" },
+  { value: "Understand", description: "Explain ideas or concepts" },
+  { value: "Apply", description: "Use information in new situations" },
+  { value: "Analyze", description: "Draw connections among ideas" },
+  { value: "Evaluate", description: "Justify a stand or decision" },
+  { value: "Create", description: "Produce new or original work" },
 ];
+const BLOOM_OPTIONS = BLOOMS.map((bloom) => ({
+  value: bloom.value,
+  label: bloom.value,
+  description: bloom.description,
+}));
 const OPTION_LABELS = ["A", "B", "C", "D"];
 
 const toInt = (value) => {
@@ -478,11 +519,15 @@ const marksByType = (questions) =>
   );
 
 const mapChipClass = (type, selected) => {
-  if (!selected) return "border-[#D1DFFC] bg-[#EAF0FA] text-[#8096B5]";
+  if (!selected) return "border-slate-200 bg-slate-50 text-slate-400";
   if (type === "MCQ") return "border-[#FF5E5E] bg-[#FFE8E8] text-[#C23D3D]";
   if (type === "TF") return "border-[#BA7BFF] bg-[#F1E8FF] text-[#7E47C5]";
   return "border-[#2EDB8C] bg-[#E7FFF3] text-[#14774B]";
 };
+
+// DESC is the fallback: normalizeType() only ever emits MCQ, TF or DESC.
+const questionTypeMeta = (type) =>
+  QUESTION_TYPES.find((entry) => entry.key === type) || QUESTION_TYPES[2];
 
 const filenameSafe = (value) =>
   String(value ?? "ai-test")
@@ -790,8 +835,130 @@ const buildFallbackPaperHtml = (meta, questions, withAnswers) => {
 };
 
 const inputClass =
-  "h-10 w-full rounded-lg border border-[#D1DFFC] bg-white px-3 text-sm font-medium text-[#193B68] outline-none placeholder:text-[#8FA4C3] focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500";
-const labelClass = "mb-2 block text-sm font-medium text-[#193B68]";
+  "w-full rounded-xl border border-gray-200 bg-white/80 px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 shadow-sm transition hover:border-indigo-300 focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-indigo-500/15";
+const invalidInputClass =
+  "w-full rounded-xl border border-red-300 bg-white/80 px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 shadow-sm transition focus:border-red-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-red-500/15";
+
+const STEPS = [
+  { id: 1, title: "Class details", hint: "Who the test is for" },
+  { id: 2, title: "Test setup", hint: "Shape of the paper" },
+];
+
+/* ---------- Small building blocks ---------- */
+
+const Stepper = ({ current }) => (
+  <ol className="flex items-center gap-2 sm:gap-3">
+    {STEPS.map((item, idx) => {
+      const isDone = current > item.id;
+      const isActive = current === item.id;
+      return (
+        <React.Fragment key={item.id}>
+          <li className="flex min-w-0 items-center gap-2.5">
+            <span
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-xs font-bold transition ${
+                isDone || isActive
+                  ? "bg-gradient-to-br from-indigo-600 to-sky-500 text-white shadow-sm shadow-indigo-500/30"
+                  : "border border-slate-200 bg-white text-slate-400"
+              }`}
+            >
+              {isDone ? <HiCheck className="h-4 w-4" /> : item.id}
+            </span>
+            {/* Phones only have room for one label, so the inactive step keeps
+                just its badge; both labels return from sm up. */}
+            <span className={`min-w-0 ${isActive ? "" : "hidden sm:block"}`}>
+              <span
+                className={`block truncate text-sm font-bold ${
+                  isActive ? "text-slate-900" : "text-slate-500"
+                }`}
+              >
+                {item.title}
+              </span>
+              <span className="hidden truncate text-xs text-slate-400 sm:block">
+                {item.hint}
+              </span>
+            </span>
+          </li>
+          {idx < STEPS.length - 1 ? (
+            <li
+              aria-hidden="true"
+              className={`h-0.5 w-8 shrink-0 rounded-full sm:w-16 ${
+                current > item.id
+                  ? "bg-gradient-to-r from-indigo-600 to-sky-500"
+                  : "bg-slate-200"
+              }`}
+            />
+          ) : null}
+        </React.Fragment>
+      );
+    })}
+  </ol>
+);
+
+const SectionHeading = ({ step, title, hint }) => (
+  <div className="mb-5 flex items-start gap-3">
+    <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-sky-500 text-[11px] font-bold text-white shadow-sm shadow-indigo-500/30">
+      {step}
+    </span>
+    <div>
+      <h2 className="text-sm font-bold uppercase tracking-wide text-slate-900">
+        {title}
+      </h2>
+      {hint ? (
+        <p className="mt-0.5 text-sm leading-6 text-slate-500">{hint}</p>
+      ) : null}
+    </div>
+  </div>
+);
+
+const Field = ({ label, hint, children }) => (
+  <div>
+    <label className="mb-1.5 block text-sm font-semibold text-gray-800">
+      {label}
+    </label>
+    {children}
+    {hint ? (
+      <p className="mt-1.5 text-xs leading-5 text-slate-500">{hint}</p>
+    ) : null}
+  </div>
+);
+
+/** One answer option. Shared by MCQ choices and the True/False pair. */
+const OptionRow = ({ label, text, correct }) => (
+  <div
+    className={`flex items-start gap-2 rounded-xl border px-3.5 py-2.5 text-sm ${
+      correct
+        ? "border-emerald-300 bg-emerald-50 font-semibold text-slate-900"
+        : "border-slate-200 bg-white text-slate-700"
+    }`}
+  >
+    <span
+      className={`font-bold ${correct ? "text-emerald-700" : "text-slate-400"}`}
+    >
+      {label}.
+    </span>
+    <span className="min-w-0 flex-1 break-words">{text}</span>
+    {correct ? (
+      <HiCheck
+        className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600"
+        aria-label="Correct answer"
+      />
+    ) : null}
+  </div>
+);
+
+const StepProgress = ({ filled, total }) => (
+  <div className="hidden shrink-0 items-center gap-2.5 sm:flex">
+    <div className="h-1.5 w-24 overflow-hidden rounded-full bg-slate-200">
+      <div
+        className="h-full rounded-full bg-gradient-to-r from-indigo-600 to-sky-500 transition-all duration-500 ease-out"
+        style={{ width: `${(filled / total) * 100}%` }}
+      />
+    </div>
+    <span className="text-xs font-semibold tabular-nums text-slate-500">
+      {filled}/{total}
+    </span>
+  </div>
+);
 
 const AITestGeneratorPage = () => {
   const {
@@ -836,10 +1003,10 @@ const AITestGeneratorPage = () => {
     if (!user || hasAutoOpenedLimitModal) return;
     if (hasActiveSubscription !== false) return;
     if (subscriptionStatus.isPremium) return;
-    if (subscriptionStatus.remainingGenerations > 0) return;
+    if (subscriptionStatus.canGenerate) return;
     if (isSubscriptionModalOpen) return;
     openGlobalSubscriptionModal({
-      reason: "generation_limit",
+      reason: "trial_expired",
       sourceTool: GUEST_AI_TOOL_KEYS.AI_TEST,
     });
     setHasAutoOpenedLimitModal(true);
@@ -848,8 +1015,8 @@ const AITestGeneratorPage = () => {
     hasActiveSubscription,
     isSubscriptionModalOpen,
     openGlobalSubscriptionModal,
+    subscriptionStatus.canGenerate,
     subscriptionStatus.isPremium,
-    subscriptionStatus.remainingGenerations,
     subscriptionStatusLoading,
     user,
   ]);
@@ -969,7 +1136,7 @@ Rules: create exactly ${distribution.totalQuestions} questions and match all typ
     setSubscriptionStatus(status);
     if (status.canGenerate) return false;
     openGlobalSubscriptionModal({
-      reason: "generation_limit",
+      reason: "trial_expired",
       sourceTool: GUEST_AI_TOOL_KEYS.AI_TEST,
     });
     return true;
@@ -1035,14 +1202,13 @@ Rules: create exactly ${distribution.totalQuestions} questions and match all typ
       if (!user) {
         consumeAiToolGuestUse(GUEST_AI_TOOL_KEYS.AI_TEST);
       } else {
-        const nextStatus = consumeGenerationForUser({
-          user,
-          toolKey: GUEST_AI_TOOL_KEYS.AI_TEST,
-        });
+        // The trial is time-based, so generating costs nothing — but re-read it
+        // anyway to catch a trial that lapsed while this session was open.
+        const nextStatus = getUserSubscriptionStatus(user);
         setSubscriptionStatus(nextStatus);
         if (!nextStatus.canGenerate) {
           openGlobalSubscriptionModal({
-            reason: "generation_limit",
+            reason: "trial_expired",
             sourceTool: GUEST_AI_TOOL_KEYS.AI_TEST,
           });
           setHasAutoOpenedLimitModal(true);
@@ -1069,7 +1235,6 @@ Rules: create exactly ${distribution.totalQuestions} questions and match all typ
       return;
     }
 
-    const targetTotalMarks = toInt(totalMarks) || totalGeneratedMarks;
     const question = aiResult?.questions?.find(
       (q, idx) => String(q?.id ?? idx + 1) === key,
     );
@@ -1180,7 +1345,6 @@ No markdown. No extra text.
       toast.error("Select at least one question to export PDF.");
       return;
     }
-    const targetTotalMarks = toInt(totalMarks) || totalGeneratedMarks;
     const selectedTotalMarks = sumMarks(selectedQuestions);
     if (selectedTotalMarks < targetTotalMarks) {
       toast.error(
@@ -1306,209 +1470,286 @@ No markdown. No extra text.
     ? marksByType(selectedQuestions)
     : { MCQ: 0, TF: 0, DESC: 0 };
 
+  // The paper must be selected to exactly this many marks before it can be
+  // downloaded. Falls back to what was generated when step 2 asked for nothing.
+  const targetTotalMarks = toInt(totalMarks) || totalGeneratedMarks;
+  const marksToGo = Math.max(0, targetTotalMarks - selectedMarks);
+  const isSelectionComplete =
+    targetTotalMarks > 0 && selectedMarks === targetTotalMarks;
+  const selectionPercent = targetTotalMarks
+    ? Math.min(100, (selectedMarks / targetTotalMarks) * 100)
+    : 0;
+
+  const showMarksError =
+    totalMarks.trim().length > 0 && !isValidTotalMarks(totalMarks);
+  // Mirrors validateStepOne/validateStepTwo so the meter tracks what actually gates the step.
+  const stepFields =
+    step === 1
+      ? [
+          board,
+          className,
+          section.trim(),
+          subject.trim(),
+          topic.trim(),
+          testName.trim(),
+        ]
+      : [
+          blooms,
+          language,
+          durationMins,
+          noOfQuestions,
+          isValidTotalMarks(totalMarks) ? totalMarks : "",
+          qTypes.length ? "set" : "",
+        ];
+  const stepFilled = stepFields.filter(Boolean).length;
+
   return (
     <>
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-sky-100 p-4 pb-10 md:p-6">
-        <div className="mx-auto max-w-[1240px] space-y-6">
-          <header className="flex flex-wrap items-center justify-end gap-3">
-            <Link
-              href="/"
-              className="inline-flex items-center gap-2 rounded-full border border-[#c2d0eb] bg-white px-4 py-2 text-sm font-semibold text-[#193B68] hover:bg-[#f3f7ff]"
-            >
-              <IoArrowBack size={16} />
-              Back to Home
-            </Link>
-          </header>
+      <main className="relative min-h-screen bg-[#f7fbff] text-slate-950">
+        <DashboardNavbar />
 
-          <div className="flex items-start gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 via-blue-600 to-sky-500 text-white shadow-lg shadow-indigo-500/25">
-              <BsStars className="h-5 w-5" />
-            </div>
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 -z-0 overflow-hidden"
+        >
+          <div className="mx-auto flex max-w-6xl justify-between">
+            <div className="h-72 w-72 -translate-x-24 rounded-full bg-indigo-300/25 blur-3xl animate-blob" />
+            <div className="h-72 w-72 translate-x-24 rounded-full bg-sky-300/25 blur-3xl animate-blob [animation-delay:3s]" />
+          </div>
+        </div>
+
+        <section className="relative z-10 mx-auto w-full max-w-6xl space-y-6 px-4 py-8 sm:px-8 sm:py-10">
+          <div className="animate-fade-in-up">
             <div>
-              <h1 className="text-3xl font-bold text-[#193B68]">
-                AI Test Generator
-              </h1>
-              <p className="text-sm text-[#597295]">
-                Create AI tests, print answer keys, and download student
-                question paper for exam.
-              </p>
+              <Link
+                href="/dashboard"
+                className="inline-block text-xs font-semibold text-slate-500 transition hover:text-indigo-600"
+              >
+                &larr; Back to dashboard
+              </Link>
             </div>
+            <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white px-4 py-2 text-sm font-semibold text-sky-700 shadow-sm">
+              <HiOutlineSparkles className="h-4 w-4" />
+              Powered by LessonPilot AI
+            </div>
+            <h1 className="mt-4 text-3xl font-bold leading-tight text-slate-950 sm:text-4xl md:text-5xl">
+              AI Test Generator
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-600 md:text-base">
+              Create AI tests, print answer keys, and download student question
+              paper for exam.
+            </p>
           </div>
 
-          <div className="rounded-xl bg-white p-5 md:rounded-[24px] md:p-8">
-            <h2 className="text-2xl font-semibold text-[#193B68] md:text-3xl">
-              Which class is this for?
-            </h2>
-            <p className="text-sm text-gray-500">
-              Select the class so the AI can generate questions aligned with
-              that grade’s syllabus and level.
-            </p>
+          <div className="animate-fade-in-up overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <span
+              aria-hidden="true"
+              className="block h-1 bg-gradient-to-r from-indigo-600 to-sky-500"
+            />
 
-            {step === 1 ? (
-              <div className="mt-6 grid gap-5 md:grid-cols-9 md:gap-8">
-                <div className="md:col-span-3">
-                  <label className={labelClass}>Board</label>
-                  <select
-                    value={board}
-                    onChange={(e) => setBoard(e.target.value)}
-                    className={inputClass}
-                  >
-                    <option value="">Select Board</option>
-                    {BOARD_OPTIONS.map((x) => (
-                      <option key={x} value={x}>
-                        {x}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="md:col-span-3">
-                  <label className={labelClass}>Class</label>
-                  <select
-                    value={className}
-                    onChange={(e) => setClassName(e.target.value)}
-                    className={inputClass}
-                  >
-                    <option value="">Select Class</option>
-                    {CLASS_OPTIONS.map((x) => (
-                      <option key={x} value={x}>
-                        {x}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="md:col-span-3">
-                  <label className={labelClass}>Section</label>
-                  <input
-                    value={section}
-                    onChange={(e) => setSection(e.target.value)}
-                    placeholder="e.g. A"
-                    className={inputClass}
+            <div className="flex items-center justify-between gap-4 border-b border-slate-100 bg-slate-50/60 px-5 py-4 sm:px-7">
+              <Stepper current={step} />
+              <StepProgress filled={stepFilled} total={stepFields.length} />
+            </div>
+
+            <div className="p-5 sm:p-7">
+              {step === 1 ? (
+                <>
+                  <SectionHeading
+                    step="1"
+                    title="Which class is this for?"
+                    hint="Select the class so the AI can generate questions aligned with that grade’s syllabus and level."
                   />
-                </div>
-                <div className="md:col-span-3">
-                  <label className={labelClass}>Subject</label>
-                  <input
-                    value={subject}
-                    onChange={(e) => setSubject(e.target.value)}
-                    placeholder="e.g. Science"
-                    className={inputClass}
+
+                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                    <Field label="Board">
+                      <SelectDropdown
+                        value={board}
+                        onChange={setBoard}
+                        options={BOARD_OPTIONS}
+                        placeholder="Select Board"
+                        ariaLabel="Board"
+                      />
+                    </Field>
+                    <Field label="Class">
+                      <SelectDropdown
+                        value={className}
+                        onChange={setClassName}
+                        options={CLASS_OPTIONS}
+                        placeholder="Select Class"
+                        ariaLabel="Class"
+                      />
+                    </Field>
+                    <Field label="Section">
+                      <input
+                        value={section}
+                        onChange={(e) => setSection(e.target.value)}
+                        placeholder="e.g. A"
+                        className={inputClass}
+                      />
+                    </Field>
+                    <Field label="Subject">
+                      <input
+                        value={subject}
+                        onChange={(e) => setSubject(e.target.value)}
+                        placeholder="e.g. Science"
+                        className={inputClass}
+                      />
+                    </Field>
+                    <Field
+                      label="Topic"
+                      hint="Be specific — “Newton’s Third Law” beats “Motion”."
+                    >
+                      <input
+                        value={topic}
+                        onChange={(e) => setTopic(e.target.value)}
+                        placeholder="e.g. Newton's Laws of Motion"
+                        className={inputClass}
+                      />
+                    </Field>
+                    <Field label="Test Name">
+                      <input
+                        value={testName}
+                        onChange={(e) => setTestName(e.target.value)}
+                        placeholder="e.g. Motion Test - 1"
+                        className={inputClass}
+                      />
+                    </Field>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <SectionHeading
+                    step="2"
+                    title="How should the paper look?"
+                    hint="Set the depth, length and question mix for this test."
                   />
-                </div>
-                <div className="md:col-span-3">
-                  <label className={labelClass}>Topic</label>
-                  <input
-                    value={topic}
-                    onChange={(e) => setTopic(e.target.value)}
-                    placeholder="e.g. Newton's Laws of Motion"
-                    className={inputClass}
+
+                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                    <Field
+                      label="Bloom's Taxonomy"
+                      hint="The thinking level the questions should target."
+                    >
+                      <SelectDropdown
+                        value={blooms}
+                        onChange={setBlooms}
+                        options={BLOOM_OPTIONS}
+                        placeholder="Select Bloom's"
+                        ariaLabel="Bloom's taxonomy"
+                      />
+                    </Field>
+                    <Field label="Language">
+                      <SelectDropdown
+                        value={language}
+                        onChange={setLanguage}
+                        options={LANGUAGE_OPTIONS}
+                        placeholder="Select Language"
+                        ariaLabel="Language"
+                      />
+                    </Field>
+                    <Field label="Duration (mins)">
+                      <input
+                        value={durationMins}
+                        onChange={(e) =>
+                          setDurationMins(e.target.value.replace(/[^0-9]/g, ""))
+                        }
+                        placeholder="e.g. 45"
+                        inputMode="numeric"
+                        className={inputClass}
+                      />
+                    </Field>
+                    <Field label="No. of Questions">
+                      <input
+                        value={noOfQuestions}
+                        onChange={(e) =>
+                          setNoOfQuestions(
+                            e.target.value.replace(/[^0-9]/g, ""),
+                          )
+                        }
+                        placeholder="e.g. 20"
+                        inputMode="numeric"
+                        className={inputClass}
+                      />
+                    </Field>
+                    <Field label="Total Marks" hint="20 to 100, in steps of 5.">
+                      <input
+                        value={totalMarks}
+                        onChange={(e) =>
+                          setTotalMarks(e.target.value.replace(/[^0-9]/g, ""))
+                        }
+                        placeholder="e.g. 25"
+                        inputMode="numeric"
+                        aria-invalid={showMarksError}
+                        className={
+                          showMarksError ? invalidInputClass : inputClass
+                        }
+                      />
+                    </Field>
+                  </div>
+
+                  <div className="my-7 border-t border-dashed border-slate-200" />
+
+                  <SectionHeading
+                    step="3"
+                    title="Question types"
+                    hint="Pick one or more — questions are split evenly across the types you choose."
                   />
-                </div>
-                <div className="md:col-span-3">
-                  <label className={labelClass}>Test Name</label>
-                  <input
-                    value={testName}
-                    onChange={(e) => setTestName(e.target.value)}
-                    placeholder="e.g. Motion Test - 1"
-                    className={inputClass}
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="mt-6 grid gap-5 md:grid-cols-12 md:gap-8">
-                <div className="md:col-span-4">
-                  <label className={labelClass}>Bloom&apos;s Taxonomy</label>
-                  <select
-                    value={blooms}
-                    onChange={(e) => setBlooms(e.target.value)}
-                    className={inputClass}
-                  >
-                    <option value="">Select Bloom&apos;s</option>
-                    {BLOOMS.map((x) => (
-                      <option key={x} value={x}>
-                        {x}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="md:col-span-4">
-                  <label className={labelClass}>Language</label>
-                  <select
-                    value={language}
-                    onChange={(e) => setLanguage(e.target.value)}
-                    className={inputClass}
-                  >
-                    {LANGUAGES.map((x) => (
-                      <option key={x} value={x}>
-                        {x}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="md:col-span-4">
-                  <label className={labelClass}>Duration (mins)</label>
-                  <input
-                    value={durationMins}
-                    onChange={(e) =>
-                      setDurationMins(e.target.value.replace(/[^0-9]/g, ""))
-                    }
-                    placeholder="e.g. 45"
-                    className={inputClass}
-                  />
-                </div>
-                <div className="md:col-span-4">
-                  <label className={labelClass}>No. of Questions</label>
-                  <input
-                    value={noOfQuestions}
-                    onChange={(e) =>
-                      setNoOfQuestions(e.target.value.replace(/[^0-9]/g, ""))
-                    }
-                    placeholder="e.g. 20"
-                    className={inputClass}
-                  />
-                </div>
-                <div className="md:col-span-3">
-                  <label className={labelClass}>Total Marks</label>
-                  <input
-                    value={totalMarks}
-                    onChange={(e) =>
-                      setTotalMarks(e.target.value.replace(/[^0-9]/g, ""))
-                    }
-                    placeholder="e.g. 25"
-                    className={inputClass}
-                  />
-                </div>
-                <div className="md:col-span-5">
-                  <label className={labelClass}>Question Types</label>
-                  <div className="flex flex-wrap gap-3">
+
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     {QUESTION_TYPES.map((type) => {
                       const active = qTypes.includes(type.key);
+                      const Icon = type.icon;
                       return (
                         <button
                           key={type.key}
                           type="button"
+                          aria-pressed={active}
                           onClick={() => toggleQType(type.key)}
-                          className={`inline-flex items-center justify-center rounded-lg border px-5 py-3 text-sm font-medium leading-none ${
+                          className={`group relative overflow-hidden rounded-2xl border p-4 text-left transition-all duration-200 ${
                             active
-                              ? "border-indigo-400 bg-indigo-50 text-indigo-700"
-                              : "border-[#C8D9F8] bg-white text-[#3C5F8F] hover:bg-[#F5F8FF]"
+                              ? "border-indigo-500 bg-gradient-to-br from-indigo-50 to-sky-50 shadow-md ring-1 ring-indigo-300"
+                              : "border-gray-200 bg-white hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-md"
                           }`}
                         >
-                          {type.label}
+                          {active ? (
+                            <span className="absolute right-3 top-3 inline-flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-white">
+                              <HiCheck className="h-3.5 w-3.5" />
+                            </span>
+                          ) : null}
+                          <span
+                            className={`inline-flex h-9 w-9 items-center justify-center rounded-xl transition ${
+                              active
+                                ? "bg-gradient-to-br from-indigo-600 to-sky-500 text-white shadow-sm shadow-indigo-500/30"
+                                : "bg-slate-100 text-slate-500 group-hover:bg-indigo-50 group-hover:text-indigo-600"
+                            }`}
+                          >
+                            <Icon className="h-5 w-5" />
+                          </span>
+                          <span
+                            className={`mt-3 block text-sm font-bold ${
+                              active ? "text-indigo-700" : "text-slate-800"
+                            }`}
+                          >
+                            {type.label}
+                          </span>
+                          <span className="mt-0.5 block text-xs leading-5 text-slate-500">
+                            {type.desc}
+                          </span>
                         </button>
                       );
                     })}
                   </div>
-                </div>
-              </div>
-            )}
+                </>
+              )}
 
-            <div className="mt-8 flex flex-wrap items-center justify-end gap-2">
-              <div className="flex flex-wrap items-center gap-2">
+              {/* col-reverse on phones: DOM order stays Previous -> primary for
+                  tab order, while the primary action sits on top of the stack. */}
+              <div className="mt-8 flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
                 {step === 2 ? (
                   <button
                     type="button"
                     onClick={handlePreviousStep}
-                    className="inline-flex h-10 items-center justify-center rounded-full border border-indigo-500 bg-white px-8 text-base font-medium text-indigo-600 hover:bg-indigo-50"
+                    className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-indigo-200 bg-white px-8 text-sm font-semibold text-indigo-700 transition hover:border-indigo-300 hover:bg-indigo-50 sm:w-auto"
                   >
                     Previous
                   </button>
@@ -1517,27 +1758,33 @@ No markdown. No extra text.
                   <button
                     type="button"
                     onClick={handleNextStep}
-                    className="inline-flex h-10 items-center justify-center rounded-full bg-gradient-to-r from-indigo-600 via-blue-600 to-sky-500 px-8 text-base font-medium text-white shadow-lg shadow-indigo-500/30 transition hover:shadow-xl hover:shadow-indigo-500/40"
+                    className="group relative inline-flex h-11 w-full items-center justify-center overflow-hidden rounded-xl bg-gradient-to-r from-indigo-600 via-blue-600 to-sky-500 px-8 text-sm font-semibold text-white shadow-lg shadow-indigo-500/30 transition hover:shadow-xl hover:shadow-indigo-500/40 sm:w-auto"
                   >
-                    Next
+                    <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent group-hover:animate-shimmer" />
+                    <span className="relative">Next</span>
                   </button>
                 ) : (
                   <button
                     type="button"
                     onClick={handleGenerate}
                     disabled={isGenerating || isPdfLoading}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 via-blue-600 to-sky-500 px-8 text-base font-medium text-white shadow-lg shadow-indigo-500/30 transition hover:shadow-xl hover:shadow-indigo-500/40 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="group relative inline-flex h-11 w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-indigo-600 via-blue-600 to-sky-500 px-8 text-sm font-semibold text-white shadow-lg shadow-indigo-500/30 transition hover:shadow-xl hover:shadow-indigo-500/40 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                   >
-                    {isGenerating ? (
-                      <>
-                        <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/90 border-t-transparent" />
-                        Generating...
-                      </>
-                    ) : (
-                      <>
-                        Generate Test <BsStars />
-                      </>
-                    )}
+                    {!isGenerating ? (
+                      <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent group-hover:animate-shimmer" />
+                    ) : null}
+                    <span className="relative flex items-center gap-2">
+                      {isGenerating ? (
+                        <>
+                          <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/90 border-t-transparent" />
+                          Generating...
+                        </>
+                      ) : (
+                        <>
+                          Generate Test <BsStars />
+                        </>
+                      )}
+                    </span>
                   </button>
                 )}
               </div>
@@ -1549,341 +1796,406 @@ No markdown. No extra text.
               ref={previewRef}
               className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_300px]"
             >
-              <div className="rounded-xl border border-[#D1DFFC] bg-white p-4 md:rounded-[24px] md:p-7">
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={handlePrintWithAnswers}
-                    disabled={isPdfLoading}
-                    className="inline-flex h-10 items-center gap-2 rounded-full border border-indigo-500 bg-white px-5 text-sm font-semibold text-indigo-600 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <LuPrinter size={16} />
-                    Download Answer Key
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDownloadPdf}
-                    disabled={isPdfLoading}
-                    className="inline-flex h-10 items-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 via-blue-600 to-sky-500 px-5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/30 transition hover:shadow-xl hover:shadow-indigo-500/40 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <LuDownload size={16} />
-                    {isPdfLoading
-                      ? "Preparing For Download..."
-                      : "Download Question Paper"}
-                  </button>
-                </div>
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <span
+                  aria-hidden="true"
+                  className="block h-1 bg-gradient-to-r from-indigo-600 to-sky-500"
+                />
 
-                <div className="mt-4 md:grid flex flex-col items-start gap-2 md:gap-4 md:grid-cols-[1fr_auto_1fr]">
-                  <div className="text-[#193B68]">
-                    <div className="text-base font-medium">
-                      <span className="text-gray-500">Class: </span>
-                      {aiResult.meta?.className || "NA"}
-                      {aiResult.meta?.section
-                        ? `-${aiResult.meta.section}`
-                        : ""}
-                    </div>
-                    <div className="mt-1 text-base font-medium">
-                      <span className="text-gray-500">Subject: </span>
-                      {aiResult.meta?.subject || "NA"}
-                    </div>
+                <div className="p-4 sm:p-7">
+                  <div className="flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+                    <button
+                      type="button"
+                      onClick={handlePrintWithAnswers}
+                      disabled={isPdfLoading}
+                      className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-white px-4 text-sm font-semibold text-indigo-700 transition hover:border-indigo-300 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                    >
+                      <LuPrinter size={15} />
+                      Answer Key
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDownloadPdf}
+                      disabled={isPdfLoading}
+                      className="group relative inline-flex h-10 w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-gradient-to-r from-indigo-600 via-blue-600 to-sky-500 px-4 text-sm font-semibold text-white shadow-lg shadow-indigo-500/30 transition hover:shadow-xl hover:shadow-indigo-500/40 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                    >
+                      {!isPdfLoading ? (
+                        <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent group-hover:animate-shimmer" />
+                      ) : null}
+                      <span className="relative flex items-center gap-2">
+                        <LuDownload size={15} />
+                        {isPdfLoading
+                          ? "Preparing..."
+                          : "Download Question Paper"}
+                      </span>
+                    </button>
                   </div>
 
-                  <div className="text-center text-3xl font-semibold leading-tight text-[#193B68]">
-                    {aiResult.meta?.testName || "AI Test"}
-                  </div>
-
-                  <div className="md:justify-self-end md:text-right text-[#193B68]">
-                    <div className="text-base font-medium">
-                      <span className="text-gray-500">Duration:</span>{" "}
-                      {aiResult.meta?.durationMins || "NA"} Minutes
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-5 rounded-xl bg-indigo-50 p-4 md:rounded-2xl md:p-5">
-                  <div className="text-lg font-medium text-[#7E91AF]">
-                    Test Instructions:
-                  </div>
-                  <ul className="mt-2 list-disc space-y-1 pl-4 text-sm text-slate-500 md:pl-6 md:text-base">
-                    <li>
-                      This Question paper contains {aiResult.questions.length}{" "}
-                      Questions.
-                    </li>
-                    {counts.MCQ ? (
-                      <li>
-                        There are {counts.MCQ} MCQs ({totalTypeMarks.MCQ} marks
-                        total).
-                      </li>
-                    ) : null}
-                    {counts.TF ? (
-                      <li>
-                        There are {counts.TF} T/F questions ({totalTypeMarks.TF}{" "}
-                        marks total).
-                      </li>
-                    ) : null}
-                    {counts.DESC ? (
-                      <li>
-                        There are {counts.DESC} descriptive questions (
-                        {totalTypeMarks.DESC} marks total).
-                      </li>
-                    ) : null}
-                    {counts.MCQ || counts.TF ? (
-                      <li>MCQ/T/F questions carry 1-2 marks each.</li>
-                    ) : null}
-                    {counts.DESC ? (
-                      <li>Descriptive questions carry 3-5 marks each.</li>
-                    ) : null}
-                    <li>
-                      The duration of the test is{" "}
-                      {aiResult.meta?.durationMins || "NA"} minutes.
-                    </li>
-                  </ul>
-                </div>
-
-                <div className="mt-6 space-y-4">
-                  {aiResult.questions.map((question, idx) => {
-                    const questionId = String(question.id || idx + 1);
-                    const isSelected = selectedIds.includes(questionId);
-                    const isRegenerating = regeneratingIndex === idx;
-                    const targetTotalMarks =
-                      toInt(totalMarks) || totalGeneratedMarks;
-                    const disableSelection =
-                      !isSelected &&
-                      selectedMarks + toInt(question.marks) > targetTotalMarks;
-
-                    return (
-                      <div
-                        id={`ai-question-${questionId}`}
-                        key={questionId}
-                        className={`rounded-xl border border-[#D1DFFC] bg-white p-4 md:rounded-[20px] md:p-5 ${
-                          isSelected ? "" : "opacity-75"
-                        }`}
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => handleRegenerateQuestion(idx)}
-                              disabled={isRegenerating}
-                              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-[#C8D9FA] text-[#315799] hover:bg-[#EDF4FF] disabled:cursor-not-allowed disabled:opacity-60"
-                              title="Regenerate question"
-                            >
-                              <FiRefreshCcw
-                                size={13}
-                                className={isRegenerating ? "animate-spin" : ""}
-                              />
-                            </button>
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              disabled={disableSelection}
-                              onChange={() => toggleSelectQuestion(questionId)}
-                              className="h-5 w-5 rounded border border-[#BBD0F8] accent-indigo-600"
-                            />
-                            <div className="text-sm font-medium text-[#8A9CB5]">
-                              Question {idx + 1}
-                            </div>
-                          </div>
-                          <div className="text-sm font-medium text-[#8A9CB5]">
-                            {toInt(question.marks)} Marks
-                          </div>
-                        </div>
-
-                        <div className="mt-3 text-sm font-semibold text-[#193B68] md:text-base">
-                          {question.type === "TF"
-                            ? question.statement
-                            : question.question}
-                        </div>
-
-                        {question.type === "MCQ" ? (
-                          <div className="mt-3 grid gap-3 md:grid-cols-2">
-                            {(question.options || []).map((option, i) => (
-                              <div
-                                key={`${question.id || idx + 1}-opt-${i}`}
-                                className={`rounded-[10px] border px-4 py-3 text-sm font-medium ${
-                                  question.answerIndex === i
-                                    ? "border-[#42FF4F] bg-[#E7FFE9] text-[#193B68]"
-                                    : "border-[#AFC7F6] bg-white text-[#193B68]"
-                                }`}
-                              >
-                                {OPTION_LABELS[i]}. {option || "-"}
-                              </div>
-                            ))}
-                          </div>
-                        ) : null}
-
-                        {question.type === "TF" ? (
-                          <div className="mt-3 grid gap-3 md:grid-cols-2">
-                            <div
-                              className={`rounded-[10px] border px-4 py-3 text-sm font-medium ${
-                                question.answer === true
-                                  ? "border-[#42FF4F] bg-[#E7FFE9] text-[#193B68]"
-                                  : "border-[#AFC7F6] bg-white text-[#193B68]"
-                              }`}
-                            >
-                              True
-                            </div>
-                            <div
-                              className={`rounded-[10px] border px-4 py-3 text-sm font-medium ${
-                                question.answer === false
-                                  ? "border-[#42FF4F] bg-[#E7FFE9] text-[#193B68]"
-                                  : "border-[#AFC7F6] bg-white text-[#193B68]"
-                              }`}
-                            >
-                              False
-                            </div>
-                          </div>
-                        ) : null}
-
-                        {question.type === "DESC" ? (
-                          <div className="mt-3 rounded-xl bg-[#E1E7F3] p-3 md:p-4">
-                            {question.answerKeyPoints?.length ? (
-                              <ul className="list-disc space-y-1 pl-5 text-sm text-[#193B68] md:text-base">
-                                {question.answerKeyPoints.map((point, i) => (
-                                  <li
-                                    key={`${question.id || idx + 1}-point-${i}`}
-                                  >
-                                    {point}
-                                  </li>
-                                ))}
-                              </ul>
-                            ) : (
-                              <div className="text-sm text-[#8A9CB5]">
-                                No key points provided.
-                              </div>
-                            )}
-                            {question.sampleAnswer ? (
-                              <div className="mt-3 text-sm text-[#193B68]">
-                                <span className="font-semibold">
-                                  Sample Answer:{" "}
-                                </span>
-                                {question.sampleAnswer}
-                              </div>
-                            ) : null}
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <aside className="space-y-4 xl:sticky xl:top-4 xl:self-start">
-                <div className="rounded-2xl border border-[#D1DFFC] bg-white p-4">
-                  <div className="text-base font-semibold text-[#193B68]">
-                    Question Map
-                  </div>
-                  <div className="mt-3 grid grid-cols-5 gap-2">
-                    {aiResult.questions.map((question, idx) => {
-                      const qid = String(question.id || idx + 1);
-                      return (
-                        <button
-                          key={`map-${qid}`}
-                          type="button"
-                          onClick={() => jumpToQuestion(qid)}
-                          className={`rounded-md border px-1 py-1 text-[11px] font-semibold transition ${mapChipClass(
-                            question.type,
-                            selectedIds.includes(qid),
-                          )}`}
+                  <div className="mt-5 text-center">
+                    <h2 className="text-2xl font-bold leading-tight text-slate-900 sm:text-3xl">
+                      {aiResult.meta?.testName || "AI Test"}
+                    </h2>
+                    <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                      {[
+                        [
+                          "Class",
+                          `${aiResult.meta?.className || "NA"}${
+                            aiResult.meta?.section
+                              ? `-${aiResult.meta.section}`
+                              : ""
+                          }`,
+                        ],
+                        ["Subject", aiResult.meta?.subject || "NA"],
+                        [
+                          "Duration",
+                          `${aiResult.meta?.durationMins || "NA"} min`,
+                        ],
+                        ["Total", `${totalGeneratedMarks} marks`],
+                      ].map(([label, value]) => (
+                        <span
+                          key={label}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs"
                         >
-                          Q{idx + 1}
-                        </button>
+                          <span className="font-medium text-slate-400">
+                            {label}
+                          </span>
+                          <span className="font-bold text-slate-700">
+                            {value}
+                          </span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="mt-5 rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50/80 to-sky-50/60 p-4 sm:p-5">
+                    <p className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                      <HiOutlineClipboardDocumentList className="h-4 w-4 text-indigo-600" />
+                      Test Instructions
+                    </p>
+                    <ul className="mt-2.5 space-y-1.5">
+                      {[
+                        `This question paper contains ${aiResult.questions.length} questions.`,
+                        counts.MCQ
+                          ? `There are ${counts.MCQ} MCQs (${totalTypeMarks.MCQ} marks total).`
+                          : null,
+                        counts.TF
+                          ? `There are ${counts.TF} T/F questions (${totalTypeMarks.TF} marks total).`
+                          : null,
+                        counts.DESC
+                          ? `There are ${counts.DESC} descriptive questions (${totalTypeMarks.DESC} marks total).`
+                          : null,
+                        counts.MCQ || counts.TF
+                          ? "MCQ/T/F questions carry 1-2 marks each."
+                          : null,
+                        counts.DESC
+                          ? "Descriptive questions carry 3-5 marks each."
+                          : null,
+                        `The duration of the test is ${
+                          aiResult.meta?.durationMins || "NA"
+                        } minutes.`,
+                      ]
+                        .filter(Boolean)
+                        .map((line) => (
+                          <li
+                            key={line}
+                            className="flex gap-2.5 text-sm leading-6 text-slate-600"
+                          >
+                            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-gradient-to-br from-indigo-600 to-sky-500" />
+                            {line}
+                          </li>
+                        ))}
+                    </ul>
+                  </div>
+
+                  <div className="mt-6 space-y-3">
+                    {aiResult.questions.map((question, idx) => {
+                      const questionId = String(question.id || idx + 1);
+                      const isSelected = selectedIds.includes(questionId);
+                      const isRegenerating = regeneratingIndex === idx;
+                      const questionMarks = toInt(question.marks);
+                      const typeMeta = questionTypeMeta(question.type);
+                      const disableSelection =
+                        !isSelected &&
+                        selectedMarks + questionMarks > targetTotalMarks;
+
+                      return (
+                        <div
+                          id={`ai-question-${questionId}`}
+                          key={questionId}
+                          className={`rounded-2xl border bg-white p-4 transition sm:p-5 ${
+                            isSelected
+                              ? "border-indigo-300 shadow-sm ring-1 ring-indigo-200"
+                              : "border-slate-200 opacity-70 hover:opacity-100"
+                          }`}
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-2.5">
+                              <label
+                                className={`inline-flex items-center gap-2.5 ${
+                                  disableSelection
+                                    ? "cursor-not-allowed"
+                                    : "cursor-pointer"
+                                }`}
+                                title={
+                                  disableSelection
+                                    ? `Adding this would exceed ${targetTotalMarks} marks`
+                                    : undefined
+                                }
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  disabled={disableSelection}
+                                  onChange={() =>
+                                    toggleSelectQuestion(questionId)
+                                  }
+                                  className="h-4 w-4 rounded border-slate-300 accent-indigo-600 disabled:cursor-not-allowed"
+                                />
+                                <span className="text-sm font-bold text-slate-700">
+                                  Question {idx + 1}
+                                </span>
+                              </label>
+                              <span
+                                className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                                style={{
+                                  background: `${typeMeta.dot}14`,
+                                  color: typeMeta.dot,
+                                }}
+                              >
+                                <span
+                                  className="h-1.5 w-1.5 rounded-full"
+                                  style={{ background: typeMeta.dot }}
+                                />
+                                {typeMeta.short}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-bold tabular-nums text-slate-600">
+                                {questionMarks}{" "}
+                                {questionMarks === 1 ? "Mark" : "Marks"}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleRegenerateQuestion(idx)}
+                                disabled={isRegenerating}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-60 sm:h-7 sm:w-7"
+                                title="Regenerate question"
+                                aria-label={`Regenerate question ${idx + 1}`}
+                              >
+                                <FiRefreshCcw
+                                  size={13}
+                                  className={
+                                    isRegenerating ? "animate-spin" : ""
+                                  }
+                                />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="mt-3 break-words text-sm font-semibold text-slate-900 sm:text-base">
+                            {question.type === "TF"
+                              ? question.statement
+                              : question.question}
+                          </div>
+
+                          {question.type === "MCQ" ? (
+                            <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
+                              {(question.options || []).map((option, i) => (
+                                <OptionRow
+                                  key={`${question.id || idx + 1}-opt-${i}`}
+                                  label={OPTION_LABELS[i]}
+                                  text={option || "-"}
+                                  correct={question.answerIndex === i}
+                                />
+                              ))}
+                            </div>
+                          ) : null}
+
+                          {question.type === "TF" ? (
+                            <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
+                              <OptionRow
+                                label="A"
+                                text="True"
+                                correct={question.answer === true}
+                              />
+                              <OptionRow
+                                label="B"
+                                text="False"
+                                correct={question.answer === false}
+                              />
+                            </div>
+                          ) : null}
+
+                          {question.type === "DESC" ? (
+                            <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50/50 p-3.5">
+                              <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-700">
+                                Answer key
+                              </p>
+                              {question.answerKeyPoints?.length ? (
+                                <ul className="mt-2 space-y-1.5">
+                                  {question.answerKeyPoints.map((point, i) => (
+                                    <li
+                                      key={`${question.id || idx + 1}-point-${i}`}
+                                      className="flex gap-2.5 text-sm leading-6 text-slate-700"
+                                    >
+                                      <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+                                      <span className="min-w-0 break-words">
+                                        {point}
+                                      </span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                <p className="mt-2 text-sm text-slate-400">
+                                  No key points provided.
+                                </p>
+                              )}
+                              {question.sampleAnswer ? (
+                                <p className="mt-3 break-words border-t border-emerald-100 pt-2.5 text-sm leading-6 text-slate-700">
+                                  <span className="font-bold text-slate-900">
+                                    Sample answer:{" "}
+                                  </span>
+                                  {question.sampleAnswer}
+                                </p>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </div>
                       );
                     })}
                   </div>
-                  <div className="mt-3 flex gap-1.5 text-xs text-[#193B68]">
-                    <div className="flex items-center gap-1">
-                      <span className="h-2.5 w-2.5 rounded-full bg-[#FF3B30]" />
-                      <span className="font-medium">MCQ</span>
+                </div>
+              </div>
+
+              {/* order-first on phones: stacked, the rail would otherwise land
+                  below every question, hiding the marks target that gates the
+                  download until you had scrolled past the whole paper. */}
+              <aside className="order-first space-y-4 lg:order-none lg:sticky lg:top-6 lg:self-start">
+                {/* Marks first: the paper must land on exactly the target before
+                    it will download, so this is the rail's main job. */}
+                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                  <div
+                    className={`relative overflow-hidden px-4 py-4 transition-colors ${
+                      isSelectionComplete
+                        ? "bg-gradient-to-br from-emerald-500 to-teal-500"
+                        : "bg-gradient-to-br from-indigo-600 via-blue-600 to-sky-500"
+                    }`}
+                  >
+                    <div className="pointer-events-none absolute inset-0 opacity-20 [background-image:radial-gradient(circle_at_1px_1px,white_1px,transparent_0)] [background-size:16px_16px]" />
+                    <div className="relative">
+                      <p className="text-sm font-bold text-white">
+                        Marks selected
+                      </p>
+                      <div className="mt-1 flex items-baseline gap-1.5">
+                        <span className="text-3xl font-bold tabular-nums text-white">
+                          {selectedMarks}
+                        </span>
+                        <span className="text-sm font-semibold text-white/75">
+                          / {targetTotalMarks}
+                        </span>
+                      </div>
+                      <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-white/25">
+                        <div
+                          className="h-full rounded-full bg-white transition-all duration-500 ease-out"
+                          style={{ width: `${selectionPercent}%` }}
+                        />
+                      </div>
+                      <p className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-white/90">
+                        {isSelectionComplete ? (
+                          <>
+                            <HiCheck className="h-3.5 w-3.5" />
+                            Ready to download
+                          </>
+                        ) : (
+                          `${marksToGo} more ${
+                            marksToGo === 1 ? "mark" : "marks"
+                          } to go`
+                        )}
+                      </p>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <span className="h-2.5 w-2.5 rounded-full bg-[#A95CFF]" />
-                      <span className="font-medium">T/F</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span className="h-2.5 w-2.5 rounded-full bg-[#24C27A]" />
-                      <span className="font-medium">Descriptive</span>
-                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                    <span>By type</span>
+                    <span>Picked · Marks</span>
+                  </div>
+                  <div className="px-4">
+                    {QUESTION_TYPES.map((type) => (
+                      <div
+                        key={`tally-${type.key}`}
+                        className="flex items-center justify-between gap-2 border-b border-slate-100 py-2.5 last:border-0"
+                      >
+                        <span className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                          <span
+                            className="h-2 w-2 shrink-0 rounded-full"
+                            style={{ background: type.dot }}
+                          />
+                          {type.short}
+                        </span>
+                        <span className="flex items-center gap-2.5">
+                          <span className="text-xs font-medium tabular-nums text-slate-400">
+                            {selectedCounts[type.key]}/{counts[type.key]}
+                          </span>
+                          <span className="inline-flex h-6 min-w-[34px] items-center justify-center rounded-md bg-slate-100 px-2 text-xs font-bold tabular-nums text-slate-700">
+                            {selectedTypeMarks[type.key]}
+                          </span>
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-[#D1DFFC] bg-white p-4">
-                  <div className="text-base font-semibold text-[#193B68]">
-                    Questions Selected
+                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                  <div className="border-b border-slate-100 bg-slate-50/60 px-4 py-3">
+                    <p className="text-sm font-bold text-slate-900">
+                      Question map
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      Click to jump. Colour marks the picked ones.
+                    </p>
                   </div>
-                  <div className="mt-3 space-y-3">
-                    <div className="flex items-center justify-between text-sm text-[#193B68]">
-                      <span className="font-medium">MCQ:</span>
-                      <div className="flex items-center gap-2">
-                        <span className="inline-flex h-7 w-9 items-center justify-center rounded-md bg-[#E8EEF9] text-xs font-semibold">
-                          {selectedCounts.MCQ}
-                        </span>
-                        <span className="inline-flex h-7 w-9 items-center justify-center rounded-md bg-[#E8EEF9] text-xs font-semibold text-[#5A7498]">
-                          {counts.MCQ}
-                        </span>
-                      </div>
+                  <div className="p-4">
+                    {/* Denser on phones, where the rail spans the full width;
+                        back to 5 once it is a 300px column. */}
+                    <div className="grid grid-cols-8 gap-1.5 sm:grid-cols-10 lg:grid-cols-5">
+                      {aiResult.questions.map((question, idx) => {
+                        const qid = String(question.id || idx + 1);
+                        return (
+                          <button
+                            key={`map-${qid}`}
+                            type="button"
+                            onClick={() => jumpToQuestion(qid)}
+                            className={`rounded-lg border py-1.5 text-[11px] font-bold transition hover:-translate-y-0.5 ${mapChipClass(
+                              question.type,
+                              selectedIds.includes(qid),
+                            )}`}
+                          >
+                            Q{idx + 1}
+                          </button>
+                        );
+                      })}
                     </div>
-                    <div className="flex items-center justify-between text-sm text-[#193B68]">
-                      <span className="font-medium">T/F:</span>
-                      <div className="flex items-center gap-2">
-                        <span className="inline-flex h-7 w-9 items-center justify-center rounded-md bg-[#E8EEF9] text-xs font-semibold">
-                          {selectedCounts.TF}
+                    <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1.5 border-t border-slate-100 pt-3">
+                      {QUESTION_TYPES.map((type) => (
+                        <span
+                          key={`legend-${type.key}`}
+                          className="flex items-center gap-1.5 text-xs font-medium text-slate-600"
+                        >
+                          <span
+                            className="h-2 w-2 rounded-full"
+                            style={{ background: type.dot }}
+                          />
+                          {type.short}
                         </span>
-                        <span className="inline-flex h-7 w-9 items-center justify-center rounded-md bg-[#E8EEF9] text-xs font-semibold text-[#5A7498]">
-                          {counts.TF}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between text-sm text-[#193B68]">
-                      <span className="font-medium">Descriptive:</span>
-                      <div className="flex items-center gap-2">
-                        <span className="inline-flex h-7 w-9 items-center justify-center rounded-md bg-[#E8EEF9] text-xs font-semibold">
-                          {selectedCounts.DESC}
-                        </span>
-                        <span className="inline-flex h-7 w-9 items-center justify-center rounded-md bg-[#E8EEF9] text-xs font-semibold text-[#5A7498]">
-                          {counts.DESC}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-[#D1DFFC] bg-white p-4">
-                  <div className="text-base font-semibold text-[#193B68]">
-                    Marks Allotted
-                  </div>
-                  <div className="mt-3 space-y-3">
-                    <div className="flex items-center justify-between text-sm text-[#193B68]">
-                      <span className="font-medium">MCQ:</span>
-                      <span className="inline-flex h-7 min-w-[36px] items-center justify-center rounded-md bg-[#E8EEF9] px-2 text-xs font-semibold">
-                        {selectedTypeMarks.MCQ}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm text-[#193B68]">
-                      <span className="font-medium">T/F:</span>
-                      <span className="inline-flex h-7 min-w-[36px] items-center justify-center rounded-md bg-[#E8EEF9] px-2 text-xs font-semibold">
-                        {selectedTypeMarks.TF}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm text-[#193B68]">
-                      <span className="font-medium">Descriptive:</span>
-                      <span className="inline-flex h-7 min-w-[36px] items-center justify-center rounded-md bg-[#E8EEF9] px-2 text-xs font-semibold">
-                        {selectedTypeMarks.DESC}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between border-t border-[#E4ECFB] pt-2 text-sm text-[#193B68]">
-                      <span className="font-semibold">Total:</span>
-                      <span className="inline-flex h-7 min-w-[36px] items-center justify-center rounded-md bg-[#E8EEF9] px-2 text-xs font-semibold">
-                        {selectedMarks}
-                      </span>
+                      ))}
                     </div>
                   </div>
                 </div>
               </aside>
             </div>
           ) : null}
-        </div>
-      </div>
+        </section>
+      </main>
       <AuthModal />
     </>
   );

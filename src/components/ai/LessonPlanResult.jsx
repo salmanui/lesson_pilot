@@ -1,6 +1,7 @@
 "use client";
 
 import React, {
+  useCallback,
   useContext,
   useLayoutEffect,
   useEffect,
@@ -11,12 +12,27 @@ import React, {
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { IoArrowBack } from "react-icons/io5";
-import { LuPrinter } from "react-icons/lu";
+import {
+  LuPrinter,
+  LuCopy,
+  LuCheck,
+  LuChevronDown,
+  LuListTree,
+  LuTarget,
+  LuPackage,
+  LuLightbulb,
+  LuFlaskConical,
+  LuMessagesSquare,
+  LuRocket,
+  LuClipboardCheck,
+  LuBookOpen,
+} from "react-icons/lu";
 import ReactMarkdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
+import DashboardNavbar from "@/src/components/dashboard/DashboardNavbar";
 import { UserContext } from "../../utils/userContext";
 import {
   GUEST_AI_TOOL_KEYS,
@@ -24,65 +40,80 @@ import {
   consumeAiToolGuestUse,
 } from "../../utils/guestAiUsage";
 import { getUserSubscriptionStatus } from "../../utils/subscriptionApi";
+import { accentForIndex } from "../../utils/ai/lessonPlanExportHtml";
+import {
+  prepareLessonMarkdown,
+  splitIntoSections,
+} from "../../utils/ai/lessonPlanMarkdown";
 
-const ExportMenu = dynamic(
-  () => import("../qeeb-deck/ExportMenu"),
-  { ssr: false }
-);
+const ExportMenu = dynamic(() => import("../qeeb-deck/ExportMenu"), {
+  ssr: false,
+});
 
-/* ---------- Table styling ---------- */
-const mdTableComponents = {
+/* ---------- Section identity ---------- */
+/**
+ * Maps a section heading to an icon. Keyed on the 5E phases plus the headings
+ * the generator commonly emits; order matters because "explain" would otherwise
+ * also match "explore".
+ */
+const SECTION_ICONS = [
+  [/engage/i, LuLightbulb],
+  [/explore/i, LuFlaskConical],
+  [/explain/i, LuMessagesSquare],
+  [/elaborate|extend/i, LuRocket],
+  [/evaluate|assess|check/i, LuClipboardCheck],
+  [/objective|outcome|goal/i, LuTarget],
+  [/material|resource/i, LuPackage],
+];
+
+function iconForSection(title = "") {
+  const hit = SECTION_ICONS.find(([pattern]) => pattern.test(title));
+  return hit ? hit[1] : LuBookOpen;
+}
+
+/* ---------- Markdown component overrides ---------- */
+const mdComponents = {
   table: ({ children }) => (
-    <div className="my-6 overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
-      <table className="min-w-[720px] w-full table-auto text-sm text-slate-800">
+    <div className="my-5 overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+      <table className="w-full table-auto text-sm text-slate-800">
         {children}
       </table>
     </div>
   ),
   thead: ({ children }) => (
-    <thead className="bg-slate-50 text-slate-600 border-b">{children}</thead>
+    <thead className="border-b border-indigo-100 bg-indigo-50/70 text-indigo-900">
+      {children}
+    </thead>
   ),
   tr: ({ children }) => (
-    <tr className="border-b border-slate-200 last:border-0 bg-white hover:bg-slate-50/60 transition-colors">
+    <tr className="border-b border-slate-200 bg-white transition-colors last:border-0 hover:bg-indigo-50/40">
       {children}
     </tr>
   ),
-  th: ({ node, ...props }) => {
-    const style = node?.properties?.style || {};
-    return (
-      <th
-        {...props}
-        style={style}
-        className="px-4 py-3 text-left font-semibold whitespace-nowrap"
-      />
-    );
-  },
-  td: ({ node, ...props }) => {
-    const style = node?.properties?.style || {};
-    return (
-      <td
-        {...props}
-        style={style}
-        className="px-4 py-3 align-top whitespace-nowrap"
-      />
-    );
-  },
+  th: ({ node, ...props }) => (
+    <th
+      {...props}
+      style={node?.properties?.style || {}}
+      className="px-4 py-2.5 text-left font-semibold"
+    />
+  ),
+  td: ({ node, ...props }) => (
+    <td {...props} style={node?.properties?.style || {}} className="px-4 py-2.5 align-top" />
+  ),
 };
 
 /* ---------- Typing banner ---------- */
 const TypingBanner = ({ show = false }) =>
   show ? (
     <>
-      <div className="sticky top-0 left-0 right-0 lg:p-6 p-4 z-20 w-full bg-[#e4d7ff]/80 backdrop-blur">
-        <div className="max-w-5xl mx-auto">
-          <div className="flex items-center gap-2 text-indigo-700 text-base font-semibold">
-            <span>AI is typing</span>
-            <span className="inline-flex items-center gap-1 ml-1">
-              <span className="qeeb-dot" />
-              <span className="qeeb-dot delay-200" />
-              <span className="qeeb-dot delay-400" />
-            </span>
-          </div>
+      <div className="lp-no-print sticky top-0 z-20 -mx-1 mb-3 rounded-xl bg-indigo-50/90 px-4 py-2.5 backdrop-blur">
+        <div className="flex items-center gap-2 text-sm font-semibold text-indigo-700">
+          <span>Writing your lesson plan</span>
+          <span className="ml-1 inline-flex items-center gap-1">
+            <span className="qeeb-dot" />
+            <span className="qeeb-dot delay-200" />
+            <span className="qeeb-dot delay-400" />
+          </span>
         </div>
       </div>
       <style>{`
@@ -117,11 +148,8 @@ function useTypewriter(text, { speed = 16, startDelay = 0 } = {}) {
         }
       }, speed);
     };
-    if (startDelay > 0) {
-      delayRef.current = setTimeout(start, startDelay);
-    } else {
-      start();
-    }
+    if (startDelay > 0) delayRef.current = setTimeout(start, startDelay);
+    else start();
     return () => {
       if (delayRef.current) clearTimeout(delayRef.current);
       if (intervalRef.current) clearInterval(intervalRef.current);
@@ -135,11 +163,11 @@ function useTypewriter(text, { speed = 16, startDelay = 0 } = {}) {
 const SkeletonLines = ({ rows = 4 }) => {
   const widths = ["100%", "92%", "85%", "70%", "95%", "80%"];
   return (
-    <div className="mt-3 space-y-4" aria-hidden="true">
+    <div className="mt-3 space-y-3" aria-hidden="true">
       {Array.from({ length: rows }).map((_, idx) => (
         <div
           key={idx}
-          className="h-4 rounded bg-slate-200 animate-pulse"
+          className="h-3.5 animate-pulse rounded bg-slate-200"
           style={{ width: widths[idx % widths.length] }}
         />
       ))}
@@ -147,29 +175,29 @@ const SkeletonLines = ({ rows = 4 }) => {
   );
 };
 
-/* ---------- Markdown that types & auto-scrolls with content (robust) ---------- */
+/* ---------- Markdown that types & auto-scrolls with content ---------- */
 const TypingMarkdown = ({
   text,
   speed = 30,
   startDelay = 0,
   active = true,
-  onTick,
+  forceFull = false,
   onDone,
   scrollParentRef,
 }) => {
   const hasTable = /\n\|.*\|\s*\n\|[-| :]+\|/m.test(text || "");
 
-  // 👇 NEW: detect when the page is going to print
-  const [isPrinting, setIsPrinting] = React.useState(false);
+  // Typing must never swallow content when the page is being printed.
+  const [isPrinting, setIsPrinting] = useState(false);
   useEffect(() => {
-    const mql = window.matchMedia && window.matchMedia("print");
+    const mql = window.matchMedia?.("print");
     const onMedia = (e) => setIsPrinting(!!e.matches);
     const onBefore = () => setIsPrinting(true);
     const onAfter = () => setIsPrinting(false);
 
     if (mql) {
       if (mql.addEventListener) mql.addEventListener("change", onMedia);
-      else mql.addListener(onMedia); // Safari/old Chrome
+      else mql.addListener(onMedia);
     }
     window.addEventListener("beforeprint", onBefore);
     window.addEventListener("afterprint", onAfter);
@@ -184,59 +212,69 @@ const TypingMarkdown = ({
     };
   }, []);
 
-  // If printing, we do NOT type — we render the full text
-  const shouldType = active && !isPrinting;
+  /**
+   * Typing is a one-way latch. Without this, anything that flips `isPrinting`
+   * (the browser's own beforeprint/afterprint, or closing the print dialog)
+   * feeds the typewriter its text again and it replays from an empty string --
+   * so the plan re-types itself after every print, and an export taken in that
+   * window captures half-typed content.
+   */
+  const [settled, setSettled] = useState(false);
+  const shouldType = active && !isPrinting && !forceFull && !settled;
 
   const { out, done } = useTypewriter(shouldType ? text || "" : "", {
     speed,
     startDelay,
   });
 
-  // If printing (or table present), always use the full text
+  useEffect(() => {
+    if (done) setSettled(true);
+  }, [done]);
+
+  // Showing the full text for print also ends typing for good.
+  useEffect(() => {
+    if (isPrinting || forceFull) setSettled(true);
+  }, [isPrinting, forceFull]);
+
   const renderText = hasTable || !shouldType ? text || "" : out;
 
-  const endRef = React.useRef(null);
-  const blockRef = React.useRef(null);
-  const prevScrollH = React.useRef(0);
+  const endRef = useRef(null);
+  const blockRef = useRef(null);
+  const prevScrollH = useRef(0);
 
-  const isNearBottom = React.useCallback((el, thresh = 160) => {
-    return el.scrollTop + el.clientHeight >= el.scrollHeight - thresh;
-  }, []);
+  const isNearBottom = useCallback(
+    (el, thresh = 160) => el.scrollTop + el.clientHeight >= el.scrollHeight - thresh,
+    []
+  );
 
-  const scrollToMe = React.useCallback(() => {
+  const scrollToMe = useCallback(() => {
     const parent = scrollParentRef?.current;
-    if (!parent || isPrinting) return; // 👈 don't auto-scroll while printing
-    if (!isNearBottom(parent)) return;
+    if (!parent || isPrinting) return undefined;
+    if (!isNearBottom(parent)) return undefined;
 
-    let r1 = requestAnimationFrame(() => {
-      let r2 = requestAnimationFrame(() => {
-        endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    const raf = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
         const grew = parent.scrollHeight > prevScrollH.current;
         if (grew) {
           parent.scrollTop = parent.scrollHeight;
           prevScrollH.current = parent.scrollHeight;
         }
       });
-      r1 = r2;
     });
-    return () => cancelAnimationFrame(r1);
+    return () => cancelAnimationFrame(raf);
   }, [scrollParentRef, isNearBottom, isPrinting]);
 
-  useEffect(() => {
-    if (shouldType) onTick?.(out);
-  }, [out, shouldType, onTick]);
-
   useLayoutEffect(() => {
-    if (!shouldType) return;
+    if (!shouldType) return undefined;
     const cleanup = scrollToMe();
     return () => cleanup && cleanup();
   }, [out, shouldType, scrollToMe]);
 
   useEffect(() => {
-    if (!shouldType) return;
+    if (!shouldType) return undefined;
     const parent = scrollParentRef?.current;
     const node = blockRef.current;
-    if (!parent || !node) return;
+    if (!parent || !node) return undefined;
     prevScrollH.current = parent.scrollHeight;
     const ro = new ResizeObserver(() => requestAnimationFrame(scrollToMe));
     ro.observe(node);
@@ -244,7 +282,11 @@ const TypingMarkdown = ({
   }, [shouldType, scrollParentRef, scrollToMe]);
 
   useEffect(() => {
-    if (done && shouldType) onDone?.();
+    if (!shouldType) {
+      onDone?.();
+      return;
+    }
+    if (done) onDone?.();
   }, [done, shouldType, onDone]);
 
   return (
@@ -252,15 +294,14 @@ const TypingMarkdown = ({
       <ReactMarkdown
         rehypePlugins={[rehypeRaw, rehypeKatex]}
         remarkPlugins={[remarkGfm, remarkMath]}
-        components={mdTableComponents}
+        components={mdComponents}
       >
         {renderText}
       </ReactMarkdown>
 
-      {/* hide typing hints in print */}
       {!hasTable && shouldType && !done ? (
-        <div className="print:hidden">
-          <SkeletonLines rows={5} />
+        <div className="lp-no-print">
+          <SkeletonLines rows={4} />
         </div>
       ) : null}
 
@@ -269,53 +310,145 @@ const TypingMarkdown = ({
   );
 };
 
-// Removes chatty prefaces and anything before the first real heading.
-function stripChattyPreface(md = "") {
-  if (!md) return "";
+/* ---------- Section card ---------- */
+const SectionCard = ({
+  index,
+  title,
+  body,
+  accent,
+  speed,
+  startDelay,
+  forceFull,
+  onDone,
+  scrollParentRef,
+  registerRef,
+}) => {
+  const [open, setOpen] = useState(true);
+  const [copied, setCopied] = useState(false);
+  const Icon = iconForSection(title);
 
-  // If there’s any H2/H3 ahead, cut everything before it
-  const idx = md.search(/^\s{0,3}#{2,3}\s+/m);
-  if (idx > 0) md = md.slice(idx);
+  const copySection = async () => {
+    try {
+      await navigator.clipboard.writeText(`${title}\n\n${body}`.trim());
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch {
+      /* clipboard unavailable (insecure origin or denied permission) */
+    }
+  };
 
-  // Kill common preface patterns (case-insensitive, tolerant)
-  md = md
-    // “Okay, here's…”, “Here is…”, “Sure, here is…”
-    .replace(/^(okay|sure|alright)[^.\n]*\.\s*$/gim, "")
-    .replace(/^\s*here(?:'s| is)\s+a?\s*lesson plan.*$/gim, "")
-    .replace(/^\s*formatted\s+as\s+requested.*$/gim, "")
-    // Bold headlines like "**Lesson Plan: ....**"
-    .replace(/^\s*\*{1,2}\s*lesson plan:[^\n]*\*{0,2}\s*$/gim, "")
-    // “Note:” headers
-    .replace(/^\s*note:\s.*$/gim, "")
-    // “Standards:” lines if present
-    .replace(/^\s*standards:\s.*$/gim, "");
+  return (
+    <section
+      id={`lp-section-${index}`}
+      ref={registerRef}
+      data-lp-section=""
+      data-lp-index={index}
+      data-lp-title={title}
+      className="lp-section scroll-mt-24 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md"
+    >
+      {title ? (
+        <header
+          className="flex items-center gap-3 border-b px-4 py-3 sm:px-5"
+          style={{ background: accent.soft, borderColor: `${accent.solid}22` }}
+        >
+          <span
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white shadow-sm"
+            style={{ background: accent.solid }}
+          >
+            <Icon size={17} />
+          </span>
 
-  // ---- NEW: strip top "metadata" rows no matter their styling/bullets ----
-  // Handles:
-  //   Subject: ...
-  //   **Subject:** ...
-  //   - Subject: ...
-  //   * **Grade Level:** 10
-  //   Time Allotment: 1 Week...
-  //   Word Count:, Tone:, School:
-  const META_KEYS =
-    "(Subject|Grade\\s*Level|Class\\/Grade|School|Time\\s*Allotment|Word\\s*Count|Tone|Duration|Alignment|Board)";
-  md = md.replace(
-    new RegExp(
-      String.raw`^\s*(?:[-*]\s*)?(?:\*\*)?\s*${META_KEYS}\s*:?(?:\*\*)?\s*.*$`,
-      "gmi"
-    ),
-    ""
+          <h2
+            className="flex-1 text-sm font-bold leading-tight sm:text-base"
+            style={{ color: accent.text }}
+          >
+            {title}
+          </h2>
+
+          <div className="lp-no-print flex items-center gap-1">
+            <button
+              type="button"
+              onClick={copySection}
+              title="Copy this section"
+              aria-label={`Copy ${title}`}
+              className="rounded-lg p-1.5 text-slate-500 transition hover:bg-white/70 hover:text-slate-800"
+            >
+              {copied ? (
+                <LuCheck size={15} className="text-emerald-600" />
+              ) : (
+                <LuCopy size={15} />
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              title={open ? "Collapse section" : "Expand section"}
+              aria-expanded={open}
+              aria-controls={`lp-body-${index}`}
+              className="rounded-lg p-1.5 text-slate-500 transition hover:bg-white/70 hover:text-slate-800"
+            >
+              <LuChevronDown
+                size={16}
+                className={`transition-transform ${open ? "" : "-rotate-90"}`}
+              />
+            </button>
+          </div>
+        </header>
+      ) : null}
+
+      {/* Hidden rather than unmounted: exports read this subtree from the DOM,
+          and `@media print` forces .lp-body visible, so a section collapsed on
+          screen still prints and exports in full. Collapsing is therefore purely
+          `open` — never `forceFull`, which latches on at print and would leave
+          the toggle permanently stuck open afterwards. */}
+      <div
+        id={`lp-body-${index}`}
+        className={`lp-body px-4 py-4 sm:px-5 sm:py-5 ${open ? "" : "hidden"}`}
+      >
+        <TypingMarkdown
+          text={body}
+          speed={speed}
+          startDelay={startDelay}
+          forceFull={forceFull}
+          onDone={onDone}
+          scrollParentRef={scrollParentRef}
+        />
+      </div>
+    </section>
   );
+};
 
-  // Remove the placeholder token if it sneaks in
-  md = md.replace(/\[Space\s*K-?12\s*School\]/gi, "");
+/* ---------- Meta chips ---------- */
+const META_FIELDS = [
+  ["Board", "board"],
+  ["Class", "className"],
+  ["Subject", "subject"],
+  ["Topic", "topic"],
+  ["Format", "format"],
+  ["Detail", "detailLevel"],
+];
 
-  // Collapse multiple blank lines
-  md = md.replace(/\n{3,}/g, "\n\n").trim();
-
-  return md;
-}
+const MetaChips = ({ form }) => (
+  <div className="mt-2.5 flex flex-wrap gap-1.5 sm:gap-2">
+    {META_FIELDS.map(([label, key]) =>
+      form?.[key] ? (
+        <span
+          key={key}
+          className="inline-flex max-w-full items-center gap-1 rounded-full border border-slate-200 bg-white/80 px-2 py-0.5 text-[11px] shadow-sm backdrop-blur sm:gap-1.5 sm:px-3 sm:py-1 sm:text-xs"
+        >
+          <span className="font-medium uppercase tracking-wide text-slate-400">
+            {label}
+          </span>
+          {/* Long values (a full topic) must ellipsize instead of forcing the
+              chip onto a row of its own. */}
+          <span className="truncate font-semibold capitalize text-slate-800">
+            {form[key]}
+          </span>
+        </span>
+      ) : null
+    )}
+  </div>
+);
 
 /* ---------- Page ---------- */
 const LessonPlanResult = ({ role = "teacher" }) => {
@@ -325,18 +458,25 @@ const LessonPlanResult = ({ role = "teacher" }) => {
     openSubscriptionModal,
     subscriptionStatusLoading,
   } = useContext(UserContext);
+
   const navKey = "qeeb:lp:teacher";
   const scrollRef = useRef(null);
   const printAreaRef = useRef(null);
+  const sectionRefs = useRef([]);
+
   const [subscriptionStatus, setSubscriptionStatus] = useState(() =>
-    getUserSubscriptionStatus(user),
+    getUserSubscriptionStatus(user)
   );
-
   const [typingCount, setTypingCount] = useState(0);
-  const isTyping = typingCount > 0;
+  const [forceFull, setForceFull] = useState(false);
+  const [activeSection, setActiveSection] = useState(0);
+  const [copiedAll, setCopiedAll] = useState(false);
 
-  const handleTick = () => {};
-  const handleDone = () => setTypingCount((c) => Math.max(0, c - 1));
+  const isTyping = typingCount > 0;
+  const handleDone = useCallback(
+    () => setTypingCount((c) => Math.max(0, c - 1)),
+    []
+  );
 
   useEffect(() => {
     setSubscriptionStatus(getUserSubscriptionStatus(user));
@@ -363,13 +503,6 @@ const LessonPlanResult = ({ role = "teacher" }) => {
     return false;
   };
 
-  const handlePrint = () => {
-    if (!requestLessonPlanDownloadAccess({ consumeGuestUse: true })) return;
-    // If you ever render only part of the page, you can clone printAreaRef into a new window.
-    // For now, the global print is perfect because we hide non-print stuff with CSS.
-    window.print();
-  };
-
   const persisted = useMemo(() => {
     if (typeof window === "undefined") return null;
     try {
@@ -383,7 +516,6 @@ const LessonPlanResult = ({ role = "teacher" }) => {
   const data = persisted?.aiResponse;
   const form = persisted?.form;
 
-  // Use API markdown AS-IS (no normalization/reordering)
   const rawJoined = useMemo(
     () =>
       (data?.text || [])
@@ -393,79 +525,175 @@ const LessonPlanResult = ({ role = "teacher" }) => {
     [data]
   );
 
-  // ✨ new: strip the preface, but don't reorder
-  const cleanedMd = useMemo(() => stripChattyPreface(rawJoined), [rawJoined]);
+  const cleanedMd = useMemo(() => prepareLessonMarkdown(rawJoined), [rawJoined]);
 
-  // If you still want type-by-section, split on H2 sections; otherwise render `cleanedMd` directly.
-  const blocks = useMemo(
-    () => (cleanedMd ? cleanedMd.split(/\n(?=##\s+)/g) : []),
+  const sections = useMemo(
+    () =>
+      splitIntoSections(cleanedMd).map((section) => ({
+        ...section,
+        accent: accentForIndex(section.index),
+      })),
     [cleanedMd]
   );
 
   useEffect(() => {
-    if (blocks.length) setTypingCount(blocks.length);
-  }, [blocks.length]);
+    setTypingCount(sections.length);
+  }, [sections.length]);
 
   const baseSpeed = 16;
-  const blockDelays = useMemo(() => {
+  const sectionDelays = useMemo(() => {
     let acc = 0;
-    return blocks.map((b, idx) => {
-      const estMs = Math.max(600, Math.min(6000, b.length * baseSpeed * 0.7));
-      const d = acc;
+    return sections.map((section, idx) => {
+      const estMs = Math.max(
+        600,
+        Math.min(6000, section.body.length * baseSpeed * 0.7)
+      );
+      const delay = acc;
       acc += estMs;
-      return d + idx * 120;
+      return delay + idx * 120;
     });
-  }, [blocks]);
+  }, [sections]);
 
   const titleText = useMemo(() => {
     const t = form?.topic?.trim();
-    if (t) return `${t}`;
+    if (t) return t;
     const s = form?.subject?.trim();
     return s ? `Lesson plan for ${s}` : null;
   }, [form]);
 
+  /* Print: settle every section's text in full before handing off to the
+     browser. Sections collapsed on screen need no help here — `@media print`
+     forces .lp-body visible. */
+  const handlePrint = () => {
+    if (!requestLessonPlanDownloadAccess({ consumeGuestUse: true })) return;
+    setForceFull(true);
+    setTypingCount(0);
+    // Two frames so React commits the fully-typed tree before the print dialog.
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => window.print())
+    );
+  };
+
+  const copyAll = async () => {
+    try {
+      await navigator.clipboard.writeText(cleanedMd);
+      setCopiedAll(true);
+      setTimeout(() => setCopiedAll(false), 1600);
+    } catch {
+      /* clipboard unavailable */
+    }
+  };
+
+  /* Highlight the section currently in view within the scroll container. */
+  useEffect(() => {
+    const parent = scrollRef.current;
+    if (!parent || !sections.length) return undefined;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        if (visible) {
+          setActiveSection(Number(visible.target.dataset.lpIndex) || 0);
+        }
+      },
+      { root: parent, rootMargin: "-80px 0px -60% 0px", threshold: 0 }
+    );
+
+    sectionRefs.current.filter(Boolean).forEach((node) => observer.observe(node));
+    return () => observer.disconnect();
+  }, [sections.length]);
+
+  const jumpTo = (index) => {
+    sectionRefs.current[index]?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  };
+
+  const exportMeta = useMemo(
+    () => ({
+      board: form?.board,
+      className: form?.className,
+      subject: form?.subject,
+      topic: form?.topic,
+      format: form?.format,
+      detailLevel: form?.detailLevel,
+    }),
+    [form]
+  );
+
   return (
-    <>
-      <div className="w-full overflow-hidden font-lato">
-        <div
-          ref={scrollRef}
-          id="lp-scroll"
-          className="h-screen overflow-auto relative z-[1]"
-        >
-          <div className="max-w-5xl mx-auto py-6 px-3 md:p-8">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-xl font-semibold flex items-center gap-2">
-                {data && (
-                  <Link
-                    href="/ai/generator-lesson-plan"
-                    className="text-indigo-600 hover:underline text-sm print:hidden"
-                    aria-label="Back to generator"
-                    title="Back"
-                  >
-                    <IoArrowBack size={22} />
-                  </Link>
-                )}
-                {titleText && (
-                  <h1 className="text-xl md:text-3xl leading-tight font-semibold text-slate-900">
-                    {titleText}
-                  </h1>
-                )}
+    <main className="min-h-screen bg-[#f7fbff] font-lato text-slate-950">
+      <DashboardNavbar />
+
+      {/* dvh, not vh: a phone's collapsing URL bar makes 100vh overshoot and
+          leaves the last section unreachable. */}
+      <div
+        ref={scrollRef}
+        id="lp-page"
+        className="relative h-[calc(100dvh-133px)] lg:h-[calc(100dvh-115px)] overflow-auto"
+      >
+        <div className="mx-auto w-full max-w-6xl px-3 py-4 sm:px-6 sm:py-6 md:py-8">
+          {/* ---- Header ---- */}
+          <div className="lp-no-print mb-4 rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-white to-indigo-50/60 p-3 shadow-sm sm:mb-5 sm:p-5">
+            {/* Column on phones so the title owns a full-width row; the toolbar
+                is shrink-0 and would otherwise squeeze it to a few characters. */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  {data && (
+                    <Link
+                      href="/ai/generator-lesson-plan"
+                      className="-ml-1 shrink-0 rounded-lg p-1.5 text-indigo-600 transition hover:bg-indigo-50"
+                      aria-label="Back to generator"
+                      title="Back to generator"
+                    >
+                      <IoArrowBack size={20} />
+                    </Link>
+                  )}
+                  {titleText && (
+                    <h1 className="min-w-0 flex-1 truncate text-lg font-bold leading-tight text-slate-900 sm:text-xl md:text-2xl">
+                      {titleText}
+                    </h1>
+                  )}
+                </div>
+                {form && <MetaChips form={form} />}
               </div>
-              <div className="flex space-x-4">
-                {/* Print button (hidden in print) */}
+
+              <div className="flex items-center gap-2 sm:shrink-0">
+                {cleanedMd && (
+                  <button
+                    type="button"
+                    onClick={copyAll}
+                    title="Copy the whole plan"
+                    className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50 sm:flex-none sm:py-1.5 md:text-sm"
+                  >
+                    {copiedAll ? (
+                      <LuCheck size={15} className="text-emerald-600" />
+                    ) : (
+                      <LuCopy size={15} />
+                    )}
+                    {copiedAll ? "Copied" : "Copy"}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={handlePrint}
-                  className="print:hidden inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs md:text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 border border-indigo-700"
+                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-indigo-700 bg-indigo-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-700 sm:flex-none sm:py-1.5 md:text-sm"
                   title="Print lesson plan"
                 >
-                  <LuPrinter size={16} />
+                  <LuPrinter size={15} />
                   Print
                 </button>
-                <div className="print:hidden">
+                <div className="flex-1 sm:flex-none">
                   <ExportMenu
                     targetRef={printAreaRef}
                     filename={titleText || "lesson-plan"}
+                    title={titleText || "Lesson Plan"}
+                    meta={exportMeta}
+                    sections={sections}
                     canDownload={subscriptionStatus.canDownload}
                     onRequestAccess={() =>
                       requestLessonPlanDownloadAccess({ consumeGuestUse: true })
@@ -474,72 +702,128 @@ const LessonPlanResult = ({ role = "teacher" }) => {
                 </div>
               </div>
             </div>
+          </div>
 
-            {form && (
-              <div className="text-xs md:text-base text-gray-800 font-medium mb-3 leading-5">
-                • Board:{" "}
-                <span className="font-semibold capitalize">{form.board}</span> •
-                Class: <span className="font-semibold">{form.className}</span> •{" "}
-                Subject: <span className="font-semibold">{form.subject}</span> •
-                Topic: <span className="font-semibold">{form.topic}</span> •
-                Format: <span className="font-semibold">{form.format}</span> •
-                Level of detail:{" "}
-                <span className="font-semibold">{form.detailLevel}</span>
-              </div>
+          <TypingBanner show={isTyping} />
+
+          {/* lp-plan-layout: print flattens this row to a block. Its only
+              printing child is the plan itself (the TOC is lp-no-print), and a
+              flex container paginates its items unreliably. */}
+          <div className="lp-plan-layout flex gap-6">
+            {/* ---- Table of contents ---- */}
+            {sections.length > 1 && (
+              <aside className="lp-no-print hidden w-60 shrink-0 lg:block">
+                <nav className="sticky top-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+                  <p className="mb-2 flex items-center gap-1.5 px-2 text-xs font-bold uppercase tracking-wide text-slate-400">
+                    <LuListTree size={14} />
+                    Sections
+                  </p>
+                  <ul className="space-y-0.5">
+                    {sections.map((section) => {
+                      const isActive = activeSection === section.index;
+                      return (
+                        <li key={section.index}>
+                          <button
+                            type="button"
+                            onClick={() => jumpTo(section.index)}
+                            className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs font-medium transition ${
+                              isActive
+                                ? "bg-indigo-50 text-indigo-700"
+                                : "text-slate-600 hover:bg-slate-50"
+                            }`}
+                          >
+                            <span
+                              className="h-1.5 w-1.5 shrink-0 rounded-full"
+                              style={{
+                                background: isActive
+                                  ? section.accent.solid
+                                  : "#cbd5e1",
+                              }}
+                            />
+                            <span className="truncate">
+                              {section.title || `Part ${section.index + 1}`}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </nav>
+              </aside>
             )}
 
-            <TypingBanner show={isTyping} />
-
+            {/* ---- Plan ---- */}
             <div
               ref={printAreaRef}
-              id="lp-scroll"
+              id="lp-print-area"
               data-export-root
-              className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-6 lg:p-8 relative"
+              className="min-w-0 flex-1"
             >
               {!data ? (
-                <div className="flex flex-col justify-center items-center h-40">
-                  <p className="text-gray-700 text-lg">
-                    No lesson plan data found. Please go back and generate a
-                    plan.
+                <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white p-10 text-center shadow-sm">
+                  <p className="text-lg text-slate-700">
+                    No lesson plan data found. Please go back and generate a plan.
                   </p>
-                  <div className="mt-3">
-                    <Link
-                      href="/ai/generator-lesson-plan"
-                      className="inline-flex px-5 py-2.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
-                    >
-                      Open Generator
-                    </Link>
-                  </div>
+                  <Link
+                    href="/ai/generator-lesson-plan"
+                    className="mt-4 inline-flex rounded-lg bg-indigo-600 px-5 py-2.5 text-white transition hover:bg-indigo-700"
+                  >
+                    Open Generator
+                  </Link>
                 </div>
               ) : (
-                <>
+                <div className="space-y-4">
+                  {/* Print-only cover: the on-screen header is hidden on paper. */}
+                  <div className="hidden print:mb-4 print:block">
+                    {titleText && (
+                      <h1 className="text-2xl font-bold text-slate-900">
+                        {titleText}
+                      </h1>
+                    )}
+                    {form && (
+                      <p className="mt-1 text-xs text-slate-600">
+                        {META_FIELDS.map(([label, key]) =>
+                          form[key] ? `${label}: ${form[key]}` : null
+                        )
+                          .filter(Boolean)
+                          .join("  •  ")}
+                      </p>
+                    )}
+                    <hr className="mt-3 border-slate-300" />
+                  </div>
+
                   {data.imageUrl ? (
                     <img
                       src={data.imageUrl}
                       alt="Lesson visual"
-                      className="rounded-lg mb-5 max-h-64 w-full object-cover"
+                      className="max-h-64 w-full rounded-2xl object-cover shadow-sm"
                     />
                   ) : null}
 
-                  {blocks.map((block, i) => (
-                    <div key={`md-block-${i}`} className="mb-8 last:mb-0">
-                      <TypingMarkdown
-                        text={block}
-                        speed={baseSpeed}
-                        startDelay={blockDelays[i]}
-                        onTick={handleTick}
-                        onDone={handleDone}
-                        scrollParentRef={scrollRef}
-                      />
-                    </div>
+                  {sections.map((section) => (
+                    <SectionCard
+                      key={`lp-section-${section.index}`}
+                      index={section.index}
+                      title={section.title}
+                      body={section.body}
+                      accent={section.accent}
+                      speed={baseSpeed}
+                      startDelay={sectionDelays[section.index]}
+                      forceFull={forceFull}
+                      onDone={handleDone}
+                      scrollParentRef={scrollRef}
+                      registerRef={(node) => {
+                        sectionRefs.current[section.index] = node;
+                      }}
+                    />
                   ))}
-                </>
+                </div>
               )}
             </div>
           </div>
         </div>
       </div>
-    </>
+    </main>
   );
 };
 

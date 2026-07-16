@@ -13,6 +13,7 @@ import {
   HiCheck,
 } from "react-icons/hi2";
 import { fetchLessonPlan } from "../../utils/ai/lessonPlanApi";
+import { BOARD_OPTIONS } from "../../utils/ai/boards";
 import { useRouter } from "next/navigation";
 import { UserContext } from "../../utils/userContext";
 import AuthModal from "../AuthModal";
@@ -23,68 +24,7 @@ import {
   canUseAiToolAsGuest,
   consumeAiToolGuestUse,
 } from "../../utils/guestAiUsage";
-import {
-  consumeGenerationForUser,
-  getUserSubscriptionStatus,
-} from "../../utils/subscriptionApi";
-
-// Values stay human-readable because getIncludeLine() below parses them to
-// build the syllabus alignment line sent to the model.
-const BOARD_OPTIONS = [
-  {
-    // Keep the value bare: getIncludeLine() treats whatever precedes "SSC" as a
-    // state name, so "SSC Board" would read "Board SSC (State Board)".
-    value: "SSC",
-    label: "SSC",
-    description: "State Board — Secondary School Certificate",
-  },
-  {
-    value: "CBSE",
-    label: "CBSE",
-    description: "Central Board of Secondary Education",
-  },
-  {
-    value: "ICSE",
-    label: "ICSE",
-    description: "CISCE — Indian Certificate of Secondary Education",
-  },
-  { value: "ISC", label: "ISC", description: "CISCE — Indian School Certificate" },
-  {
-    value: "IB",
-    label: "IB",
-    description: "International Baccalaureate",
-  },
-  {
-    value: "Cambridge (CAIE)",
-    label: "Cambridge (CAIE)",
-    description: "IGCSE and A-Levels",
-  },
-  {
-    value: "NIOS",
-    label: "NIOS",
-    description: "National Institute of Open Schooling",
-  },
-  {
-    value: "Maharashtra SSC",
-    label: "Maharashtra SSC",
-    description: "Maharashtra State Board",
-  },
-  {
-    value: "Tamil Nadu State Board",
-    label: "Tamil Nadu State Board",
-    description: "Samacheer Kalvi",
-  },
-  {
-    value: "Karnataka State Board",
-    label: "Karnataka State Board",
-    description: "KSEEB",
-  },
-  {
-    value: "UP Board",
-    label: "UP Board",
-    description: "Uttar Pradesh Madhyamik Shiksha Parishad",
-  },
-];
+import { getUserSubscriptionStatus } from "../../utils/subscriptionApi";
 
 const CLASS_OPTIONS = Array.from({ length: 10 }, (_, i) => {
   const value = String(i + 1);
@@ -202,10 +142,10 @@ const LessonPlanGenerator = ({ onSubmit }) => {
     if (!user || hasAutoOpenedLimitModal) return;
     if (hasActiveSubscription !== false) return;
     if (subscriptionStatus.isPremium) return;
-    if (subscriptionStatus.remainingGenerations > 0) return;
+    if (subscriptionStatus.canGenerate) return;
     if (isSubscriptionModalOpen) return;
     openGlobalSubscriptionModal({
-      reason: "generation_limit",
+      reason: "trial_expired",
       sourceTool: GUEST_AI_TOOL_KEYS.LESSON_PLAN,
     });
     setHasAutoOpenedLimitModal(true);
@@ -214,8 +154,8 @@ const LessonPlanGenerator = ({ onSubmit }) => {
     hasActiveSubscription,
     isSubscriptionModalOpen,
     openGlobalSubscriptionModal,
+    subscriptionStatus.canGenerate,
     subscriptionStatus.isPremium,
-    subscriptionStatus.remainingGenerations,
     subscriptionStatusLoading,
     user,
   ]);
@@ -253,7 +193,7 @@ const LessonPlanGenerator = ({ onSubmit }) => {
     setSubscriptionStatus(status);
     if (status.canGenerate) return false;
     openGlobalSubscriptionModal({
-      reason: "generation_limit",
+      reason: "trial_expired",
       sourceTool: GUEST_AI_TOOL_KEYS.LESSON_PLAN,
     });
     return true;
@@ -346,14 +286,13 @@ const LessonPlanGenerator = ({ onSubmit }) => {
       if (!user) {
         consumeAiToolGuestUse(GUEST_AI_TOOL_KEYS.LESSON_PLAN);
       } else {
-        const nextStatus = consumeGenerationForUser({
-          user,
-          toolKey: GUEST_AI_TOOL_KEYS.LESSON_PLAN,
-        });
+        // The trial is time-based, so generating costs nothing — but re-read it
+        // anyway to catch a trial that lapsed while this session was open.
+        const nextStatus = getUserSubscriptionStatus(user);
         setSubscriptionStatus(nextStatus);
         if (!nextStatus.canGenerate) {
           openGlobalSubscriptionModal({
-            reason: "generation_limit",
+            reason: "trial_expired",
             sourceTool: GUEST_AI_TOOL_KEYS.LESSON_PLAN,
           });
           setHasAutoOpenedLimitModal(true);
