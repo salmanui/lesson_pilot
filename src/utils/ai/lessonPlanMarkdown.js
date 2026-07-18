@@ -19,7 +19,7 @@ export function stripChattyPreface(md = "") {
     .replace(/^\s*standards:\s.*$/gim, "");
 
   const META_KEYS =
-    "(Subject|Grade\\s*Level|Class\\/Grade|School|Time\\s*Allotment|Word\\s*Count|Tone|Duration|Alignment|Board)";
+    "(Subject|Grade\\s*Level|Class\\/Grade|School|Time\\s*Allotment|Word\\s*Count|Tone|Duration|Alignment|Board|Language)";
   md = md.replace(
     new RegExp(
       String.raw`^\s*(?:[-*]\s*)?(?:\*\*)?\s*${META_KEYS}\s*:?(?:\*\*)?\s*.*$`,

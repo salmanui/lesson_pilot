@@ -158,9 +158,12 @@ function metaTable(docx, meta) {
     ["Board", meta.board],
     ["Class", meta.className],
     ["Subject", meta.subject],
+    ["Lesson", meta.lessonName],
     ["Topic", meta.topic],
+    ["Language", meta.language],
     ["Format", meta.format],
     ["Level of detail", meta.detailLevel],
+    ["Date", meta.generatedOn],
   ].filter(([, value]) => Boolean(value));
 
   if (!entries.length) return [];

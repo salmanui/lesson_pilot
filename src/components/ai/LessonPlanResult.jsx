@@ -423,9 +423,12 @@ const META_FIELDS = [
   ["Board", "board"],
   ["Class", "className"],
   ["Subject", "subject"],
+  ["Lesson", "lessonName"],
   ["Topic", "topic"],
+  ["Language", "language"],
   ["Format", "format"],
   ["Detail", "detailLevel"],
+  ["Date", "generatedOn"],
 ];
 
 const MetaChips = ({ form }) => (
@@ -617,9 +620,12 @@ const LessonPlanResult = ({ role = "teacher" }) => {
       board: form?.board,
       className: form?.className,
       subject: form?.subject,
+      lessonName: form?.lessonName,
       topic: form?.topic,
+      language: form?.language,
       format: form?.format,
       detailLevel: form?.detailLevel,
+      generatedOn: form?.generatedOn,
     }),
     [form]
   );

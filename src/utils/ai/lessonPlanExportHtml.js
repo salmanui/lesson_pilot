@@ -88,9 +88,12 @@ function metaRows(meta = {}) {
     ["Board", meta.board],
     ["Class", meta.className],
     ["Subject", meta.subject],
+    ["Lesson", meta.lessonName],
     ["Topic", meta.topic],
+    ["Language", meta.language],
     ["Format", meta.format],
     ["Level of detail", meta.detailLevel],
+    ["Date", meta.generatedOn],
   ].filter(([, value]) => Boolean(value));
 
   if (!entries.length) return "";
@@ -133,6 +136,7 @@ function stylesheet() {
     .cover-eyebrow {
       font-size: 8.5pt;
       letter-spacing: 1.6px;
+      line-height: 1.2;
       text-transform: uppercase;
       color: #e0e7ff;
       margin: 0 0 6px;
@@ -174,9 +178,14 @@ function stylesheet() {
       border-radius: 12px;
       page-break-inside: auto;
     }
+    /* line-height is pinned rather than inherited from body's 1.6: html2canvas
+       draws glyphs low inside a tall line box, so the leftover half-leading
+       gathers above the text and the title reads as bottom-aligned. A tight
+       line box plus symmetric padding centres it in the bar. */
     .section-head {
-      padding: 9px 14px;
+      padding: 11px 14px;
       font-size: 12.5pt;
+      line-height: 1.2;
       font-weight: 700;
       color: #ffffff;
       page-break-after: avoid;

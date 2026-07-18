@@ -14,6 +14,7 @@ import {
 } from "react-icons/hi2";
 import { fetchLessonPlan } from "../../utils/ai/lessonPlanApi";
 import { BOARD_OPTIONS } from "../../utils/ai/boards";
+import { DEFAULT_LANGUAGE, LANGUAGE_OPTIONS } from "../../utils/ai/languages";
 import { useRouter } from "next/navigation";
 import { UserContext } from "../../utils/userContext";
 import AuthModal from "../AuthModal";
@@ -54,6 +55,16 @@ const FORMAT_ICONS = {
   "Inquiry-Based": HiOutlineMagnifyingGlass,
   UDL: HiOutlineAcademicCap,
 };
+
+// The model has no clock, so without an explicit date it emits an unfilled
+// "Date: [Date]" placeholder. Computed per submit, not at module load, so a tab
+// left open overnight still stamps the day the plan was actually generated.
+const formatGenerationDate = (date) =>
+  new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(date);
 
 const DEFAULT_SPACE = "K-12 School";
 const DEFAULT_TONE = ["Informative", "Academic", "Direct"];
@@ -119,7 +130,9 @@ const LessonPlanGenerator = ({ onSubmit }) => {
   const [board, setBoard] = useState("");
   const [klass, setKlass] = useState("");
   const [subject, setSubject] = useState("");
+  const [lessonName, setLessonName] = useState("");
   const [topic, setTopic] = useState("");
+  const [language, setLanguage] = useState(DEFAULT_LANGUAGE);
   const [format, setFormat] = useState("5-Part");
   const [detailLevel, setDetailLevel] = useState("High Detail"); // not used in prompt
   const role = "teacher";
@@ -165,17 +178,18 @@ const LessonPlanGenerator = ({ onSubmit }) => {
       board.trim() &&
       klass.trim() &&
       subject.trim() &&
-      topic.trim() &&
+      lessonName.trim() &&
+      language &&
       format &&
       detailLevel,
-    [board, klass, subject, topic, format, detailLevel]
+    [board, klass, subject, lessonName, language, format, detailLevel]
   );
 
   const error = (msg) =>
     touched ? <p className="mt-1 text-xs text-red-600">{msg}</p> : null;
 
   // UI-only: progress across the four required fields
-  const filledCount = [board, klass, subject, topic].filter((v) =>
+  const filledCount = [board, klass, subject, lessonName].filter((v) =>
     v.trim()
   ).length;
   const progress = (filledCount / 4) * 100;
@@ -214,7 +228,10 @@ const LessonPlanGenerator = ({ onSubmit }) => {
       board: board.trim(),
       className: klass.trim(),
       subject: subject.trim(),
+      lessonName: lessonName.trim(),
       topic: topic.trim(),
+      language,
+      generatedOn: formatGenerationDate(new Date()),
       format,
       detailLevel, // only for display on result page
       role,
@@ -259,11 +276,17 @@ const LessonPlanGenerator = ({ onSubmit }) => {
 
     const prompt =
       `Generate a Lesson Plan of ${payload.topic} | ` +
+      `from the lesson ${payload.lessonName} | ` +
       `for ${isK12 ? `Grade ${payload.className}` : payload.className} | ` +
       `${isK12 ? `space ${DEFAULT_SPACE} | ` : ""}` +
       `WC: ${DEFAULT_WC} | ` +
       `TONE: [${DEFAULT_TONE.join(", ")} ] | ` +
-      `INCLUDE: ${includeLine} | Format: ${payload.format}`;
+      `INCLUDE: ${includeLine} | Format: ${payload.format} | ` +
+      `DATE: ${payload.generatedOn} — use this exact date wherever the plan ` +
+      `shows a date; never output a placeholder such as [Date] | ` +
+      // Last so it is the closest instruction to the model's turn; the whole
+      // plan (headings included) must come back in the chosen language.
+      `LANGUAGE: Write the entire lesson plan in ${payload.language}`;
 
     try {
       setLoading(true);
@@ -412,10 +435,22 @@ const LessonPlanGenerator = ({ onSubmit }) => {
                     </Field>
 
                     <Field
-                      label="Topic"
-                      hint=""
-                      error={!topic.trim() && error("Please enter a topic.")}
+                      label="Lesson name"
+                      error={
+                        !lessonName.trim() &&
+                        error("Please enter a lesson name.")
+                      }
                     >
+                      <input
+                        type="text"
+                        value={lessonName}
+                        onChange={(e) => setLessonName(e.target.value)}
+                        placeholder="e.g., Force and Laws of Motion"
+                        className={inputBase}
+                      />
+                    </Field>
+
+                    <Field label="Topic">
                       <input
                         type="text"
                         value={topic}
@@ -423,9 +458,20 @@ const LessonPlanGenerator = ({ onSubmit }) => {
                         placeholder="e.g., Newton's Laws of Motion"
                         className={inputBase}
                       />
-                      <span className="text-xs text-slate-400">
-                        What are you planning to teach?
-                      </span>
+                    </Field>
+
+                    <Field
+                      label="Language"
+                      error={!language && error("Please choose a language.")}
+                    >
+                      <SelectDropdown
+                        value={language}
+                        onChange={setLanguage}
+                        options={LANGUAGE_OPTIONS}
+                        placeholder="Select language"
+                        ariaLabel="Language"
+                        invalid={touched && !language}
+                      />
                     </Field>
                   </div>
 
@@ -547,7 +593,7 @@ const LessonPlanGenerator = ({ onSubmit }) => {
                     <div className="relative">
                       <p className="text-sm font-bold text-white">Your plan</p>
                       <p className="mt-0.5 text-xs text-white/80">
-                        {filledCount}/4 details completed
+                        {filledCount}/3 details completed
                       </p>
                       <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/25">
                         <div
@@ -562,7 +608,9 @@ const LessonPlanGenerator = ({ onSubmit }) => {
                     <SummaryRow label="Board" value={board} />
                     <SummaryRow label="Class" value={classLabel} />
                     <SummaryRow label="Subject" value={subject.trim()} />
+                    <SummaryRow label="Lesson" value={lessonName.trim()} />
                     <SummaryRow label="Topic" value={topic.trim()} />
+                    <SummaryRow label="Language" value={language} />
                     <SummaryRow label="Format" value={format} />
                     <SummaryRow label="Detail" value={detailLevel} />
                   </div>

@@ -16,6 +16,10 @@ import {
 import { toast } from "react-toastify";
 import { fetchLessonPlan } from "@/src/utils/ai/lessonPlanApi";
 import { BOARD_OPTIONS } from "@/src/utils/ai/boards";
+import {
+  DEFAULT_LANGUAGE,
+  LANGUAGE_OPTIONS,
+} from "@/src/utils/ai/languages";
 import { UserContext } from "@/src/utils/userContext";
 import DashboardNavbar from "@/src/components/dashboard/DashboardNavbar";
 import SelectDropdown from "@/src/components/ui/SelectDropdown";
@@ -55,14 +59,9 @@ const QUESTION_TYPES = [
     icon: HiOutlinePencilSquare,
   },
 ];
-const LANGUAGES = ["English", "Hindi", "Telugu"];
 const CLASS_OPTIONS = Array.from({ length: 10 }, (_, i) => ({
   value: String(i + 1),
   label: `Class ${i + 1}`,
-}));
-const LANGUAGE_OPTIONS = LANGUAGES.map((language) => ({
-  value: language,
-  label: language,
 }));
 const BLOOMS = [
   { value: "Remember", description: "Recall facts and basic concepts" },
@@ -977,7 +976,7 @@ const AITestGeneratorPage = () => {
   const [subject, setSubject] = useState("");
   const [topic, setTopic] = useState("");
   const [testName, setTestName] = useState("");
-  const [language, setLanguage] = useState("English");
+  const [language, setLanguage] = useState(DEFAULT_LANGUAGE);
   const [blooms, setBlooms] = useState("");
   const [durationMins, setDurationMins] = useState("");
   const [noOfQuestions, setNoOfQuestions] = useState("");
